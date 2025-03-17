@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Home, LogOut, UserMinus, X } from 'lucide-react';
 import ConfirmModal from '@/components/ConfirmModal';
 
 interface SidebarMenuProps {
@@ -13,9 +14,21 @@ interface SidebarMenuProps {
 const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: SidebarMenuProps) => {
   const router = useRouter();
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
-  const [accionConfirmacion, setAccionConfirmacion] = useState<'logout' | 'unregister'>('logout');
+  const [accionConfirmacion, setAccionConfirmacion] = useState<'logout' | 'unregister' | 'home'>('logout');
+  const [isMobile, setIsMobile] = useState(false);
 
-  const handleActionClick = (accion: 'logout' | 'unregister') => {
+  // Detectar si es dispositivo móvil
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleActionClick = (accion: 'logout' | 'unregister' | 'home') => {
     setAccionConfirmacion(accion);
     setMostrarConfirmacion(true);
   };
@@ -23,13 +36,19 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
   const handleConfirm = () => {
     if (accionConfirmacion === 'logout') {
       onLogout();
-    } else {
+      // Redirigir a la página principal usando el router de Next.js
+      router.push('/');
+    } else if (accionConfirmacion === 'unregister') {
       onUnregister();
+      // Redirigir a la página principal usando el router de Next.js
+      router.push('/');
+    } else if (accionConfirmacion === 'home') {
+      // Redirigir a la página principal sin ejecutar logout o unregister
+      router.push('/');
     }
-    setMostrarConfirmacion(false);
     
-    // Redirigir a la página principal usando el router de Next.js
-    router.push('/');
+    setMostrarConfirmacion(false);
+    setMenuAbierto(false); // Cerrar el menú después de confirmar la acción
   };
 
   const handleCancel = () => {
@@ -38,8 +57,22 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
 
   return (
     <>
+      {/* Overlay para dispositivos móviles */}
+      {menuAbierto && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setMenuAbierto(false)}
+        ></div>
+      )}
+      
       {/* Menú lateral */}
-      <div className={`fixed top-0 right-0 w-64 h-full bg-white shadow-lg transform ${menuAbierto ? 'translate-x-0' : 'translate-x-full'} transition-transform duration-300 ease-in-out z-50`}>
+      <div 
+        className={`fixed top-0 ${isMobile ? 'left-0' : 'right-0'} w-64 h-full bg-white shadow-lg transform ${
+          menuAbierto 
+            ? 'translate-x-0' 
+            : isMobile ? '-translate-x-full' : 'translate-x-full'
+        } transition-transform duration-300 ease-in-out z-50`}
+      >
         <div className="p-4 flex flex-col h-full">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-semibold text-gray-800">Menú</h3>
@@ -47,31 +80,35 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
               onClick={() => setMenuAbierto(false)}
               className="p-1 rounded-full hover:bg-gray-100"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-6 w-6 text-gray-600" />
             </button>
           </div>
           
           <div className="flex-1 flex flex-col gap-4">
+            {/* Botón de Inicio */}
+            <button 
+              onClick={() => handleActionClick('home')}
+              className="py-2 px-4 bg-green-800/10 text-green-800 rounded-md hover:bg-green-200 transition duration-300 flex items-center gap-2"
+            >
+              <Home className="h-5 w-5" />
+              Ir a Inicio
+            </button>
+            
+            {/* Cerrar Sesión */}
             <button 
               onClick={() => handleActionClick('logout')}
-              className="py-2 px-4 bg-green-800/10 text-green-800 rounded-md hover:bg-blue-200 transition duration-300 flex items-center gap-2"
+              className="py-2 px-4 bg-green-800/10 text-green-800 rounded-md hover:bg-green-200 transition duration-300 flex items-center gap-2"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm1 0v14h12V3H4z" clipRule="evenodd" />
-                <path d="M7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" />
-              </svg>
+              <LogOut className="h-5 w-5" />
               Cerrar Sesión
             </button>
             
+            {/* Darse de Baja */}
             <button 
               onClick={() => handleActionClick('unregister')}
               className="py-2 px-4 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition duration-300 flex items-center gap-2"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+              <UserMinus className="h-5 w-5" />
               Darse de Baja
             </button>
           </div>
@@ -81,9 +118,13 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
       {/* Modal de confirmación usando el componente ConfirmModal */}
       <ConfirmModal
         isOpen={mostrarConfirmacion}
-        message={accionConfirmacion === 'unregister' 
-          ? '¿Está seguro que desea darse de baja del sistema? Esta acción no se puede deshacer y se eliminarán todos sus datos.'
-          : '¿Está seguro que desea cerrar la sesión?'}
+        message={
+          accionConfirmacion === 'unregister' 
+            ? '¿Está seguro que desea darse de baja del sistema? Esta acción no se puede deshacer y se eliminarán todos sus datos.'
+            : accionConfirmacion === 'logout'
+              ? '¿Está seguro que desea cerrar la sesión?'
+              : '¿Está seguro que desea salir de la zona de usuario? Esto cerrará su sesión.'
+        }
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />

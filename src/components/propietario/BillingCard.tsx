@@ -1,6 +1,6 @@
 'use client';
 import { Facturacion } from '@/types/types';
-import { Receipt, FileText, CreditCard } from 'lucide-react';
+import { Receipt, FileText } from 'lucide-react';
 import './dashboard-styles.css';
 
 interface BillingCardProps {
@@ -30,24 +30,17 @@ const BillingCard = ({ facturaciones }: BillingCardProps) => {
             <table className="w-full">
               <thead>
                 <tr>
-                  <th className="w-1/6">ID</th>
-                  <th className="w-3/6">Tipo Residuo</th>
+                  <th className="w-4/6">Tipo Residuo</th>
                   <th className="w-2/6 text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {facturaciones.map((factura, index) => (
                   <tr 
-                    key={factura.id} 
+                    key={index} 
                     className="animate-fadeIn"
                     style={{ animationDelay: `${0.2 + index * 0.1}s` }}
                   >
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <CreditCard size={16} className="text-yellow-500" />
-                        {factura.id}
-                      </div>
-                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         <span className={`w-3 h-3 rounded-full ${factura.tipoResiduo.descripcion === 'Orgánico' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>

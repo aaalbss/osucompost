@@ -1,5 +1,5 @@
 import React from 'react';
-import { Leaf, Droplet, Bug } from 'lucide-react';
+import { Leaf, Droplet, Worm } from 'lucide-react';
 
 const products = [
   {
@@ -29,7 +29,7 @@ const products = [
     ]
   },
   {
-    icon: <Bug className="w-8 h-8" />,
+    icon: <Worm className="w-8 h-8" />,
     title: "Lombriz Viva",
     description: "Eisenia foetida (Lombriz Roja Californiana) para múltiples usos",
     features: [

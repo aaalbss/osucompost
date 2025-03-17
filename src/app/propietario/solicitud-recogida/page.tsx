@@ -52,11 +52,11 @@ export default function SolicitudRecogidaPage() {
 
   // Manejar cierre y éxito
   const handleClose = () => {
-    router.push('/propietario/zona-usuario');
+    router.push('/propietario');
   };
 
   const handleSuccess = () => {
-    router.push('/propietario/zona-usuario');
+    router.push('/propietario');
   };
 
   if (isLoading) {

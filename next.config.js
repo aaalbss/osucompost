@@ -11,10 +11,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   async rewrites() {
+    console.log('Configurando rewrites para proxy API');
     return [
       {
         source: '/api/:path*',
-        destination: process.env.API_URL || 'http://82.165.142.177:8083/api/:path*',
+        destination: 'http://82.165.142.177:8083/api/:path*',
       },
     ];
   },

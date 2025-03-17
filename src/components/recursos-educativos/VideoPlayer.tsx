@@ -183,7 +183,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <div
       ref={playerRef}
-      className="w-full max-w-3xl mx-auto bg-black rounded-lg overflow-hidden shadow-2xl relative"
+      className="w-full max-w-3xl mx-auto bg-black rounded-lg overflow-hidden border-2 border-green-800 shadow-2xl relative"
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >

@@ -2,8 +2,9 @@
 import { useState } from "react";
 import Title from "@/components/Title";
 import Link from "next/link";
-import  RegisterFormDos  from "@/components/RegisterForm/RegisterFormDos"; // Importación actualizada
+import RegisterFormDos from "@/components/RegisterForm/RegisterFormDos"; 
 import LoginForm from "@/components/login/LoginForm";
+import { Home } from "lucide-react";
 
 export default function AreaCliente() {
   const [isLogin, setIsLogin] = useState(false);
@@ -11,9 +12,18 @@ export default function AreaCliente() {
   return (
     <div className="min-h-screen bg-[#f0f4f8]">
       <header className="bg-white shadow-md py-4 fixed top-0 w-full z-50">
-        <div className="text-center">
-          <Link href="/">
-            <Title text="OSUCOMPOST" />
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <div className="flex-1 flex justify-center">
+            <Link href="/">
+              <Title text="OSUCOMPOST" />
+            </Link>
+          </div>
+          <Link 
+            href="/" 
+            className="p-2 hover:bg-green-100 rounded-full transition-colors"
+            aria-label="Ir a página principal"
+          >
+            <Home size={24} className="text-green-800" />
           </Link>
         </div>
       </header>

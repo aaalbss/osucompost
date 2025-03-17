@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";  // Añadir esta importación
+import { useRouter } from "next/navigation";
 import { Propietario, PuntoRecogida, Facturacion } from "@/types/types";
 import { ExtendedRecogida } from "@/types/extendedTypes";
 import { cascadeDeleteService } from "@/services/CascadeDeleteService";
+import { contenedorAPI } from "@/services/api"; // Asegúrate de importar contenedorAPI
+import  {formatearTipoResiduo} from "@/utils/formatoResiduos"; // Asegúrate de importar GetTipoResiduo
 
 import UserHeader from "@/components/propietario/UserHeader";
 import Chatbot from "@/components/ChatBot";
@@ -26,24 +28,29 @@ import { formatearFecha } from "@/lib/dateUtils";
 const LOADING_TIMEOUT = 15000; // 15 segundos
 
 export default function PropietarioPage() {
-  const router = useRouter();  // Añadir hook de router
+  const router = useRouter();
 
   const [propietario, setPropietario] = useState<Propietario | null>(null);
   const [puntosRecogida, setPuntosRecogida] = useState<PuntoRecogida[]>([]);
   const [facturaciones, setFacturaciones] = useState<Facturacion[]>([]);
   const [recogidas, setRecogidas] = useState<ExtendedRecogida[]>([]);
-  const [fechaAlta, setFechaAlta] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [contenedores, setContenedores] = useState<any[]>([]); // Nuevo estado para contenedores
   const [datosCargando, setDatosCargando] = useState({
     propietario: true,
     puntosRecogida: true,
     facturaciones: true,
     recogidas: true,
+    contenedores: true, // Añadir contenedores al estado de carga
   });
 
+  // Determinar el tipo de contenedor basado en los contenedores cargados
+  const tipoContenedor = contenedores.length > 0
+  ? `${formatearTipoResiduo(contenedores[0].tipoResiduo).descripcion} - ${contenedores[0].capacidad} L`
+  : undefined;
 
   useEffect(() => {
     // Función para extraer datos del localStorage
@@ -113,15 +120,36 @@ export default function PropietarioPage() {
             setPuntosRecogida(fullData.puntosRecogida);
             setFacturaciones(fullData.facturaciones);
             setRecogidas(fullData.recogidas);
-            setFechaAlta(fullData.fechaAlta);
+
+            // Cargar los contenedores si hay puntos de recogida
+            if (fullData.puntosRecogida.length > 0) {
+              try {
+                const contenedoresPunto = await contenedorAPI.obtenerPorPuntoRecogida(fullData.puntosRecogida[0].id);
+                
+                // Formatear el tipo de residuo en cada contenedor
+                const contenedoresFormateados = contenedoresPunto.map(contenedor => ({
+                  ...contenedor,
+                  tipoResiduo: formatearTipoResiduo(contenedor.tipoResiduo)
+                }));
+                
+                setContenedores(contenedoresFormateados);
+              } catch (contenedorError) {
+                console.error("Error al cargar contenedores:", contenedorError);
+              } finally {
+                setDatosCargando(prev => ({ ...prev, contenedores: false }));
+              }
+            } else {
+              setDatosCargando(prev => ({ ...prev, contenedores: false }));
+            }
 
             // Marcar todos los datos como cargados
-            setDatosCargando({
+            setDatosCargando(prev => ({
+              ...prev,
               propietario: false,
               puntosRecogida: false,
               facturaciones: false,
               recogidas: false,
-            });
+            }));
           } catch (fullDataError) {
             console.error("Error al cargar datos completos:", fullDataError);
             // Aún mostramos la página con datos básicos si falla la carga completa
@@ -268,57 +296,56 @@ export default function PropietarioPage() {
       </div>
     );
 
-    return (
-      <div className="relative min-h-screen">
-        {/* Fondo con gradiente fijo */}
-        <div className="fixed top-0 left-0 w-full h-full bg-gradient-to-b from-white via-[#E8EFE2] to-white"></div>
-  
-        {/* Header con botón de menú */}
-        <div className="relative z-10">
-          <UserHeader onOpenMenu={() => setMenuAbierto(true)} />
-  
-          {/* Menú lateral */}
-          <SidebarMenu
-            menuAbierto={menuAbierto}
-            setMenuAbierto={setMenuAbierto}
-            onLogout={cerrarSesion}
-            onUnregister={confirmarBaja}
-          />
-  
-          <main className="container mx-auto p-8 space-y-8">
-            {/* Botón nuevo para solicitar recogida */}
-            <div className="flex justify-center mb-8">
-              <button 
-                onClick={() => router.push('/propietario/solicitud-recogida')}
-                className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium"
-              >
-                Solicitar Recogida Puntual
-              </button>
+  return (
+    <div className="relative min-h-screen">
+      {/* Fondo con gradiente fijo */}
+      <div className="fixed top-0 left-0 w-full h-full bg-gradient-to-b from-white via-[#E8EFE2] to-white"></div>
+
+      {/* Header con botón de menú */}
+      <div className="relative z-10">
+        <UserHeader onOpenMenu={() => setMenuAbierto(true)} />
+
+        {/* Menú lateral */}
+        <SidebarMenu
+          menuAbierto={menuAbierto}
+          setMenuAbierto={setMenuAbierto}
+          onLogout={cerrarSesion}
+          onUnregister={confirmarBaja}
+        />
+
+        <main className="container mx-auto p-8 space-y-8">
+          {/* Botón nuevo para solicitar recogida */}
+          <div className="flex justify-center mb-8">
+            <button 
+              onClick={() => router.push('/propietario/solicitud-recogida')}
+              className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium"
+            >
+              Solicitar Recogida Puntual
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* PersonalInfoCard con tipo de contenedor */}
+            <PersonalInfoCard
+              propietario={propietario}
+              tipoContenedor={tipoContenedor}
+            />
+
+            <StatsCard recogidas={recogidas} />
+            <PickupPointsCard puntosRecogida={puntosRecogida} />
+            <BillingCard facturaciones={facturaciones} />
+            
+            <div className="md:col-span-2">
+              <ProximasRecogidas recogidas={recogidas} />
             </div>
-  
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Resto de componentes */}
-              <PersonalInfoCard
-                propietario={propietario}
-                fechaAlta={fechaAlta}
-                formatearFecha={formatearFecha}
-              />
-  
-              <StatsCard recogidas={recogidas} />
-              <PickupPointsCard puntosRecogida={puntosRecogida} />
-              <BillingCard facturaciones={facturaciones} />
-              
-              <div>
-                <ProximasRecogidas recogidas={recogidas} />
-              </div>
-            </div>
-          </main>
-        </div>
-  
-        {/* Chatbot fijo en la esquina inferior derecha */}
-        <div className="fixed bottom-0 right-0 z-50 p-4">
-          <Chatbot />
-        </div>
+          </div>
+        </main>
       </div>
-    );
-  }
+
+      {/* Chatbot fijo en la esquina inferior derecha */}
+      <div className="fixed bottom-0 right-0 z-50 p-4">
+        <Chatbot />
+      </div>
+    </div>
+  );
+}

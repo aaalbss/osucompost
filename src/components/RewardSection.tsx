@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { Gift, Recycle, CalendarClock, CreditCard } from 'lucide-react';
 
 const RewardSection = () => {
@@ -65,9 +66,11 @@ const RewardSection = () => {
               <p className="text-gray-600 mb-8 text-lg">
                 Transforma tus residuos en recompensas y ayuda al planeta
               </p>
-              <button className="bg-green-800 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-green-800/90 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl">
-                Comenzar ahora
-              </button>
+              <Link href="/area-cliente">
+                <button className="bg-green-800 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-green-800/90 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl">
+                  Comenzar ahora
+                </button>
+              </Link>
             </div>
           </div>
         </div>

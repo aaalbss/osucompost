@@ -18,33 +18,51 @@ interface Precio {
   tipoResiduo: TipoResiduo;
 }
 
-// Cambiar la URL base para usar el proxy de Next.js
-// const API_BASE_URL = 'http://82.165.142.177:8083/api';
-const API_BASE_URL = '/api/proxy'; // Este es el cambio principal
+// Usar la variable de entorno para la URL base
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
+console.log('API Base URL:', API_BASE_URL); // Depuración
 
 // Función auxiliar para hacer fetch con timeout y manejo de errores
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 10000) => {
+  console.log('=== INICIO fetchWithTimeout ===');
+  console.log('URL solicitada:', url);
+  console.log('Opciones:', JSON.stringify(options));
+  
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => {
+    console.log('Timeout alcanzado, abortando...');
+    controller.abort();
+  }, timeoutMs);
   
   try {
     const signal = controller.signal;
+    console.log('Iniciando fetch...');
     const response = await fetch(url, { ...options, signal });
     clearTimeout(timeoutId);
     
+    console.log('Respuesta recibida. Status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Error desconocido');
+      console.error(`Error HTTP ${response.status}: ${errorText}`);
       throw new Error(`Error HTTP ${response.status}: ${errorText}`);
     }
     
-    return await response.json();
+    const jsonData = await response.json();
+    console.log('Datos JSON recibidos:', jsonData);
+    return jsonData;
   } catch (error) {
     clearTimeout(timeoutId);
+    console.error('Error en fetchWithTimeout:', error);
+    
     if (error instanceof DOMException && error.name === 'AbortError') {
       console.error(`La solicitud a ${url} ha excedido el tiempo de espera`);
       throw new Error(`La solicitud ha excedido el tiempo de espera. Por favor, inténtelo de nuevo.`);
     }
+    
     throw error;
+  } finally {
+    console.log('=== FIN fetchWithTimeout ===');
   }
 };
 
@@ -52,29 +70,38 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
 export const propietarioAPI = {
   verificarDNI: async (dni: string): Promise<Propietario | null> => {
     try {
-      console.log(`Verificando DNI: ${dni}`);
-      const url = `${API_BASE_URL}/propietarios/${dni}`;
+      // Limpieza apropiada del DNI (sin eliminar números)
+      const dniLimpio = dni
+        .toString()
+        .replace(/[^0-9A-Z]/g, '')  // Mantiene solo números y letras
+        .trim()
+        .toUpperCase();
+      
+      const url = `${API_BASE_URL}/propietarios/${dniLimpio}`;
       
       try {
-        const propietario = await fetchWithTimeout(url);
-        console.log('Propietario verificado:', propietario);
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            return null;
+          }
+          throw new Error(`Error HTTP ${response.status}`);
+        }
+        
+        const propietario = await response.json();
         return propietario;
-      } catch (error) {
-        // Si es un error 404, devolvemos null en lugar de lanzar error
-        if (error instanceof Error && (
-          error.message.includes('404') || 
-          error.message.includes('No encontrado')
-        )) {
-          console.log('DNI no encontrado, devolviendo null');
+      } catch {
+        // Intentar con fetchWithTimeout como fallback
+        try {
+          const propietario = await fetchWithTimeout(url);
+          return propietario;
+        } catch {
           return null;
         }
-        // Para otros errores, los relanzamos
-        throw error;
       }
-    } catch (error) {
-      console.error('Error en verificarDNI:', error);
-      // Propagar el error pero asegurando que sea de tipo Error
-      throw new Error(`Error en verificarDNI: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } catch {
+      return null;
     }
   },
 
@@ -110,9 +137,10 @@ export const authAPI = {
   login: async (dni: string, email: string): Promise<Propietario | null> => {
     try {
       console.log(`Intentando login con DNI: ${dni} y email: ${email}`);
+      const dniNormalizado = dni.trim().toUpperCase();
       
       // Primero verificamos si existe el propietario
-      const propietario = await propietarioAPI.verificarDNI(dni);
+      const propietario = await propietarioAPI.verificarDNI(dniNormalizado);
       
       if (!propietario) {
         console.log('DNI no encontrado en base de datos');
@@ -125,6 +153,21 @@ export const authAPI = {
         return null;
       }
       
+      // NUEVO: Si es la primera vez que este usuario inicia sesión en este dispositivo,
+      // intentar obtener su fecha de alta para guardarla en localStorage
+      if (!localStorage.getItem(`fechaAlta_${dniNormalizado}`)) {
+        try {
+          console.log('Primera sesión en este dispositivo, obteniendo fecha de alta...');
+          // Intentamos obtener la fecha de la base de datos para guardarla localmente
+          const fechaAlta = await obtenerFechaAltaUsuario(dniNormalizado);
+          if (fechaAlta) {
+            console.log(`Guardando fecha de alta en localStorage durante login: ${fechaAlta}`);
+          }
+        } catch (error) {
+          console.error('Error al obtener fecha de alta durante login:', error);
+        }
+      }
+      
       console.log('Autenticación exitosa:', propietario);
       return propietario;
     } catch (error) {
@@ -133,7 +176,7 @@ export const authAPI = {
     }
   },
   
-  // También podemos agregar una función para comprobar las credenciales
+  // El resto permanece igual
   verificarCredenciales: async (dni: string, email: string): Promise<boolean> => {
     try {
       const propietario = await authAPI.login(dni, email);
@@ -265,18 +308,27 @@ export const precioAPI = {
 export const obtenerFechaAltaUsuario = async (dni: string): Promise<string | null> => {
   try {
     console.log(`Obteniendo fecha de alta para el usuario con DNI: ${dni}`);
+    const dniNormalizado = dni.trim().toUpperCase();
     
-    // 1. Obtener todos los puntos de recogida del usuario
-    const puntosRecogida = await puntosRecogidaAPI.obtenerPorPropietario(dni);
+    // 1. Verificar si tenemos la fecha guardada en localStorage
+    const fechaAltaGuardada = localStorage.getItem(`fechaAlta_${dniNormalizado}`);
+    if (fechaAltaGuardada) {
+      console.log(`Fecha de alta encontrada en almacenamiento local: ${fechaAltaGuardada}`);
+      return fechaAltaGuardada;
+    }
+    
+    // 2. Estrategia de recuperación de fecha de alta
+    // Obtener los puntos de recogida del usuario
+    const puntosRecogida = await puntosRecogidaAPI.obtenerPorPropietario(dniNormalizado);
     if (puntosRecogida.length === 0) {
       console.log('No se encontraron puntos de recogida para este usuario');
       return null;
     }
     
-    // 2. Obtener todos los contenedores
+    // 3. Obtener todos los contenedores de los puntos de recogida del usuario
     const todosLosContenedores = await contenedorAPI.obtenerTodos();
     
-    // 3. Filtrar los contenedores que pertenecen a los puntos de recogida del usuario
+    // Filtrar contenedores del usuario
     const idsPuntosRecogida = puntosRecogida.map(punto => punto.id);
     const contenedoresUsuario = todosLosContenedores.filter(
       contenedor => idsPuntosRecogida.includes(contenedor.puntoRecogida.id)
@@ -287,7 +339,7 @@ export const obtenerFechaAltaUsuario = async (dni: string): Promise<string | nul
       return null;
     }
     
-    // 4. Obtener los tipos de residuo únicos de los contenedores del usuario
+    // 4. Identificar tipos de residuo del usuario
     const tiposResiduoUsuario = new Set(
       contenedoresUsuario.map(contenedor => contenedor.tipoResiduo.id)
     );
@@ -305,24 +357,27 @@ export const obtenerFechaAltaUsuario = async (dni: string): Promise<string | nul
       return null;
     }
     
-    // 7. Ordenar los precios por fecha de inicio (más reciente primero)
+    // 7. Ordenar los precios por fecha de inicio (más antiguo primero)
     const preciosOrdenados = preciosRelevantes.sort((a, b) => 
-      new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
+      new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime()
     );
     
-    // 8. Encontrar la fecha de registro específica para cada tipo de residuo
-    // Esta es la clave: usar un método diferente para determinar la fecha de alta
+    // 8. Usar el precio más antiguo como fecha de alta
+    const fechaAlta = preciosOrdenados[0]?.fechaInicio || null;
     
-    // Obtener fecha más antigua (primera creación de precio para los tipos de residuo del usuario)
-    // Esta sería la fecha de alta del usuario en el sistema para su tipo de residuo
-    const fechaMasAntigua = preciosOrdenados.reduce((fechaAntigua, precio) => {
-      const fechaPrecio = new Date(precio.fechaInicio);
-      const fechaActual = fechaAntigua ? new Date(fechaAntigua) : new Date();
-      return fechaPrecio < fechaActual ? precio.fechaInicio : fechaAntigua;
-    }, null);
+    // 9. Guardar la fecha encontrada en localStorage para futuras consultas
+    if (fechaAlta) {
+      // Agregar un flag para evitar modificaciones
+      const fechaAltaAlmacenada = JSON.stringify({
+        fecha: fechaAlta,
+        inmutable: true
+      });
+      
+      localStorage.setItem(`fechaAlta_${dniNormalizado}`, fechaAltaAlmacenada);
+      console.log(`Fecha de alta encontrada y guardada en localStorage: ${fechaAlta}`);
+    }
     
-    console.log(`Fecha de alta determinada: ${fechaMasAntigua}`);
-    return fechaMasAntigua;
+    return fechaAlta;
   } catch (error) {
     console.error('Error al obtener la fecha de alta del usuario:', error);
     throw new Error(`Error al obtener la fecha de alta: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -335,6 +390,33 @@ export const registroAPI = {
     try {
       console.log('Iniciando registro de propietario');
       const dniNormalizado = formData.dni.trim().toUpperCase();
+      
+      // 1. Verificar si ya existe una fecha de alta inmutable
+      const fechaAltaExistente = localStorage.getItem(`fechaAlta_${dniNormalizado}`);
+      let fechaAlta: string;
+
+      // 2. Determinar la fecha de alta
+      if (fechaAltaExistente) {
+        const fechaAltaObj = JSON.parse(fechaAltaExistente);
+        
+        // Si ya existe una fecha inmutable, usarla
+        if (fechaAltaObj.inmutable) {
+          fechaAlta = fechaAltaObj.fecha;
+          console.log('Fecha de alta ya establecida y bloqueada:', fechaAlta);
+        } else {
+          // Si no es inmutable, usar la fecha existente o la actual
+          fechaAlta = fechaAltaObj.fecha || new Date().toISOString();
+        }
+      } else {
+        // Si no existe, usar la fecha actual
+        fechaAlta = new Date().toISOString();
+      }
+      
+      // 3. Guardar la fecha de alta como inmutable
+      localStorage.setItem(`fechaAlta_${dniNormalizado}`, JSON.stringify({
+        fecha: fechaAlta,
+        inmutable: true
+      }));
       
       // Primero verificar si el propietario ya existe
       let propietarioExistente = null;
@@ -369,10 +451,7 @@ export const registroAPI = {
         propietarioData = propietarioExistente;
       }
       
-      // El resto del código permanece igual...
-      // Todas las llamadas a ${API_BASE_URL} ahora usarán el nuevo valor (/api/proxy)
-      
-      // Código existente...
+      // El resto del código permanece prácticamente igual...
       const puntosExistentes = await puntosRecogidaAPI.obtenerPorPropietario(dniNormalizado);
       
       const direccionNormalizada = formData.domicilio.trim().toLowerCase();
@@ -383,7 +462,7 @@ export const registroAPI = {
       
       if (puntoExistente) {
         console.log('Punto de recogida ya existe, saltando creación:', puntoExistente);
-        return true; // O puedes devolver un mensaje específico si prefieres
+        return true;
       }
       
       const tipoResiduoData: TipoResiduo = {
@@ -397,8 +476,9 @@ export const registroAPI = {
         provincia: formData.provincia.trim(),
         direccion: formData.domicilio.trim(),
         dni: dniNormalizado,
-        horario: formData.horario === 'Manana' ? 'M' : 
-                formData.horario === 'Tarde' ? 'T' : 'N',
+        horario: formData.horario.includes('Mañana') || formData.horario.includes('Manana') ? 'M' : 
+        formData.horario.includes('Tarde') ? 'T' : 
+        formData.horario.includes('Noche') ? 'N' : 'M', 
         tipo: formData.fuente,
         propietario: propietarioData
       };
@@ -449,7 +529,7 @@ export const registroAPI = {
       // Verificar si ya existe una facturación para este propietario y tipo de residuo
       const facturacionesExistentes = await facturacionAPI.obtenerPorPropietario(dniNormalizado);
       const facturacionExistente = facturacionesExistentes.find(facturacion => 
-        facturacion.id_tipo_residuo === tipoResiduoData.id
+        facturacion.idTipoResiduo === tipoResiduoData.id
       );
       
       if (!facturacionExistente) {
@@ -475,32 +555,28 @@ export const registroAPI = {
         console.log('Facturación ya existe, saltando creación:', facturacionExistente);
       }
       
-      // MODIFICACIÓN: Verificar si ya existe un precio para este tipo de residuo antes de crear uno nuevo
+      // Obtener los precios existentes para este tipo de residuo
       const preciosExistentes = await precioAPI.obtenerPorTipoResiduo(tipoResiduoData.id);
-      
-      if (preciosExistentes.length === 0) {
-        // Solo crear un nuevo precio si no existe ninguno para este tipo de residuo
-        const fechaAlta = new Date().toISOString();
-        const precioData = {
-          tipoResiduo: tipoResiduoData,
-          fechaInicio: fechaAlta,
-          fechaFin: null,
-          valor: formData.tipoResiduo === 'Organico' ? 0.15 : 0.15
-        };
-        
-        console.log('Registrando nuevo precio:', precioData);
-        await fetchWithTimeout(`${API_BASE_URL}/precios`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(precioData),
-        });
-        
-        console.log('Precio registrado correctamente');
-      } else {
-        console.log('Ya existe un precio para este tipo de residuo, saltando creación:', preciosExistentes[0]);
-      }
+
+      // Crear un nuevo precio con la fecha de alta
+      const precioData = {
+        tipoResiduo: tipoResiduoData,
+        fechaInicio: fechaAlta,
+        fechaFin: null,
+        // Mantener el mismo valor que el precio existente o usar 0.15 si no hay precios
+        valor: preciosExistentes.length > 0 ? preciosExistentes[0].valor : 0.15
+      };
+
+      console.log('Registrando precio con fecha de alta:', precioData);
+      await fetchWithTimeout(`${API_BASE_URL}/precios`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(precioData),
+      });
+
+      console.log('Precio con fecha de alta registrado correctamente');
       
       console.log('Registro completo exitoso');
       

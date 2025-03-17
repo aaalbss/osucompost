@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-
-
+import { useRouter } from 'next/navigation';
 import { 
   Loader2, 
   Check, 
@@ -184,7 +183,8 @@ interface SolicitudRecogidaProps {
   onClose?: () => void;    // Nueva prop para manejar cierre
 }
 
-const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni }) => {
+const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, onSuccess, onClose }) => {
+  const router = useRouter();
   const [tipoResiduo, setTipoResiduo] = useState('');
   const [tipoContenedor, setTipoContenedor] = useState('');
   const [horario, setHorario] = useState('');
@@ -221,17 +221,33 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni })
   const [dniError, setDniError] = useState<string>('');
   
   const handleNextStep = () => {
+    if (activeStep === 1) {
+      // Verificar DNI antes de avanzar al siguiente paso
+      if (!verificarDNI()) {
+        return; // Si el DNI no es válido, detener aquí y no avanzar
+      }
+    }
+    
     if (activeStep < 4) {
       setActiveStep(activeStep + 1);
     }
   };
-  
   const handlePreviousStep = () => {
     if (activeStep > 1) {
 
       setActiveStep(activeStep - 1);
     }
   };
+
+  const handleClose = () => {
+    if (onClose) {
+      onClose(); // Si hay un manejador de cierre proporcionado, úsalo
+    } else {
+      // Si no hay un manejador, redirigir a la zona de usuario
+      router.push('/propietario');
+    }
+  };
+
 
   // Cargar contenedores disponibles al iniciar
   useEffect(() => {
@@ -721,7 +737,7 @@ const seleccionarFecha = (fecha: Date) => {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-green-800">Solicitud de Recogida Puntual</h2>
           <button 
-            onClick={() => setMostrarFormulario(false)}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700 p-1"
           >
             ✕
