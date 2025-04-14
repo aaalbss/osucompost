@@ -20,10 +20,7 @@ export default function RootLayout({
         {/* Main content */}
         <main className="flex-grow">{children}</main>
 
-        {/* Footer */}
-        <footer className="bg-[#2f4f27] text-white text-center p-4">
-          © 2025 OSUCOMPOST
-        </footer>
+        
       </body>
     </html>
   );
