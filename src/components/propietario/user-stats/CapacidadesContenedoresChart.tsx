@@ -7,9 +7,42 @@ import { Recogida } from './tipos';
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export const CapacidadesContenedoresChart: React.FC<{ recogidas: Recogida[] }> = ({ recogidas }) => {
+export const CapacidadesContenedoresChart: React.FC<{ 
+  recogidas: Recogida[],
+  usuarioId?: number // ID del usuario actual, opcional
+}> = ({ recogidas, usuarioId }) => {
+  // Filtrar recogidas: solo aquellas asociadas al usuario actual (si se proporciona usuarioId)
+  // y que tengan fechaRecogidaReal distinto de null
+  const recogidasFiltradas = recogidas.filter(recogida => {
+    // Verificar si la fechaRecogidaReal no es null
+    const tieneFechaRecogida = recogida.fechaRecogidaReal !== null;
+    
+    // Si se proporciona usuarioId, verificar si la recogida está asociada a ese usuario
+    const esDelUsuario = usuarioId 
+      ? recogida.usuarioId === usuarioId || recogida.usuario?.id === usuarioId
+      : true; // Si no se proporciona usuarioId, consideramos todas las recogidas
+    
+    // La recogida debe cumplir ambas condiciones
+    return tieneFechaRecogida && esDelUsuario;
+  });
+
+  // Si no hay recogidas filtradas, mostrar mensaje informativo
+  if (recogidasFiltradas.length === 0) {
+    return (
+      <div className="p-6 bg-white rounded-lg shadow-md dashboard-card">
+        <h2 className="flex items-center mb-4 text-xl font-semibold text-green-800">
+          <Box className="mr-2 text-green-600" />
+          Distribución de Contenedores
+        </h2>
+        <div className="py-8 text-center text-green-700">
+          No hay recogidas completadas para mostrar. Solo se muestran recogidas con fecha de recogida real.
+        </div>
+      </div>
+    );
+  }
+
   // Agrupar capacidades de contenedores
-  const capacidadesAgrupadas = recogidas.reduce((acc, recogida) => {
+  const capacidadesAgrupadas = recogidasFiltradas.reduce((acc, recogida) => {
     const capacidad = recogida.contenedor.capacidad;
     
     if (!acc[capacidad]) {
@@ -116,24 +149,24 @@ export const CapacidadesContenedoresChart: React.FC<{ recogidas: Recogida[] }> =
   };
 
   return (
-    <div className="dashboard-card bg-white shadow-md rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4 flex items-center text-green-800">
+    <div className="p-6 bg-white rounded-lg shadow-md dashboard-card">
+      <h2 className="flex items-center mb-4 text-xl font-semibold text-green-800">
         <Box className="mr-2 text-green-600" />
-        Distribución de Contenedores
+        Distribución de Contenedores Recogidos
       </h2>
       
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Gráfico de Número de Contenedores */}
-        <div className="bg-white p-4 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4 text-center text-green-700">
+        <div className="p-4 bg-white rounded-lg">
+          <h3 className="mb-4 text-lg font-semibold text-center text-green-700">
             Cantidad por Tamaño
           </h3>
           <Doughnut data={dataCantidad} options={options} />
         </div>
         
         {/* Gráfico de Capacidad Total */}
-        <div className="bg-white p-4 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4 text-center text-green-700">
+        <div className="p-4 bg-white rounded-lg">
+          <h3 className="mb-4 text-lg font-semibold text-center text-green-700">
             Capacidad Total por Tipo
           </h3>
           <Doughnut data={dataCapacidadTotal} options={options} />
@@ -141,9 +174,9 @@ export const CapacidadesContenedoresChart: React.FC<{ recogidas: Recogida[] }> =
       </div>
 
       {/* Resumen Detallado */}
-      <div className="mt-6 bg-green-50 p-4 rounded-lg">
-        <h3 className="font-semibold mb-3 text-green-800">Resumen de Contenedores</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="p-4 mt-6 rounded-lg bg-green-50">
+        <h3 className="mb-3 font-semibold text-green-800">Resumen de Contenedores Recogidos</h3>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -161,7 +194,7 @@ export const CapacidadesContenedoresChart: React.FC<{ recogidas: Recogida[] }> =
                 ))}
                 <tr className="bg-green-100">
                   <td className="p-2 font-medium text-green-800">Total</td>
-                  <td className="p-2 text-right font-medium text-green-800">{cantidades.reduce((a, b) => a + b, 0)}</td>
+                  <td className="p-2 font-medium text-right text-green-800">{cantidades.reduce((a, b) => a + b, 0)}</td>
                 </tr>
               </tbody>
             </table>
@@ -184,7 +217,7 @@ export const CapacidadesContenedoresChart: React.FC<{ recogidas: Recogida[] }> =
                 ))}
                 <tr className="bg-green-100">
                   <td className="p-2 font-medium text-green-800">Total</td>
-                  <td className="p-2 text-right font-medium text-green-800">{capacidadesTotales.reduce((a, b) => a + b, 0)} L</td>
+                  <td className="p-2 font-medium text-right text-green-800">{capacidadesTotales.reduce((a, b) => a + b, 0)} L</td>
                 </tr>
               </tbody>
             </table>

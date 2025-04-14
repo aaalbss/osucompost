@@ -3,22 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ErrorMessage } from './ErrorMessage';
 import { RecogidasHorario } from './RecogidasHorario';
-import { ContenedoresChart } from './ContenedoresChart';
 import { CapacidadesContenedoresChart } from './CapacidadesContenedoresChart';
 import { RemuneracionContenedores } from './RemuneracionContenedores';
-import { RecogidasCapacidad } from './RecogidasCapacidad';
 import { Recogida, PuntoRecogida } from './tipos';
 import { getNombreResiduoPorId } from '@/utils/formatoResiduos';
 
 interface UserStatsProps {
   propietarioDni: string;
+  usuarioId?: number; // ID del usuario actual (opcional)
 }
 
-const UserStats: React.FC<UserStatsProps> = ({ propietarioDni }) => {
+const UserStats: React.FC<UserStatsProps> = ({ propietarioDni, usuarioId }) => {
   const [recogidas, setRecogidas] = useState<Recogida[]>([]);
   const [puntoRecogida, setPuntoRecogida] = useState<PuntoRecogida[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estado para recogidas filtradas (completadas)
+  const [recogidasCompletadas, setRecogidasCompletadas] = useState<Recogida[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -26,16 +28,40 @@ const UserStats: React.FC<UserStatsProps> = ({ propietarioDni }) => {
         const recocidasResponse = await fetch('/api/recogidas');
         const recocidasData: Recogida[] = await recocidasResponse.json();
         
+        // Filtrar recogidas del propietario
         const ownerRecogidas = recocidasData.filter(
           (recogida) => {
             if (!recogida.contenedor?.puntoRecogida?.propietario) {
               console.warn('Incomplete recogida data:', recogida);
               return false;
             }
+            
             return recogida.contenedor.puntoRecogida.propietario.dni === propietarioDni;
           }
         );
         
+        // Guardar todas las recogidas del propietario
+        setRecogidas(ownerRecogidas);
+        
+        // Ahora filtramos para obtener solo las completadas
+        // (fechaRecogidaReal !== null y asociadas al usuario si se proporcionó usuarioId)
+        const completadas = ownerRecogidas.filter(recogida => {
+          // Verificar que tiene fecha de recogida real
+          const tieneFechaRecogida = recogida.fechaRecogidaReal !== null;
+          
+          // Si se proporciona usuarioId, verificar si la recogida está asociada a ese usuario
+          const esDelUsuario = usuarioId 
+            ? recogida.usuarioId === usuarioId || recogida.usuario?.id === usuarioId
+            : true; // Si no se proporciona usuarioId, consideramos todas las recogidas
+          
+          // La recogida debe cumplir ambas condiciones
+          return tieneFechaRecogida && esDelUsuario;
+        });
+        
+        // Guardar las recogidas completadas filtradas
+        setRecogidasCompletadas(completadas);
+        
+        // Obtener puntos de recogida
         const puntosResponse = await fetch('/api/puntos-recogida');
         const puntosData: PuntoRecogida[] = await puntosResponse.json();
         
@@ -43,7 +69,6 @@ const UserStats: React.FC<UserStatsProps> = ({ propietarioDni }) => {
           (punto) => punto.propietario?.dni === propietarioDni
         );
         
-        setRecogidas(ownerRecogidas);
         setPuntoRecogida(ownerPuntos);
         
         setLoading(false);
@@ -57,56 +82,59 @@ const UserStats: React.FC<UserStatsProps> = ({ propietarioDni }) => {
     if (propietarioDni) {
       fetchData();
     }
-  }, [propietarioDni]);
+  }, [propietarioDni, usuarioId]);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
-  // Contabilizar el número total de recogidas
-  const totalRecogidas = recogidas.length;
+  // Contabilizar el número total de recogidas completadas
+  const totalRecogidas = recogidasCompletadas.length;
   
-  // Obtener tipos de residuo únicos con formato correcto
-  const tiposResiduoUnicos = [...new Set(recogidas.map(r => {
+  // Obtener tipos de residuo únicos con formato correcto (solo de recogidas completadas)
+  const tiposResiduoUnicos = [...new Set(recogidasCompletadas.map(r => {
     // Obtener nombre formateado según el ID
     return getNombreResiduoPorId(r.contenedor.tipoResiduo.id) || r.contenedor.tipoResiduo.descripcion;
   }))];
   
   // Calcular el acumulado total (número de contenedores * capacidad de cada contenedor)
-  const acumuladoTotal = recogidas.reduce((sum, r) => {
+  const acumuladoTotal = recogidasCompletadas.reduce((sum, r) => {
     return sum + r.contenedor.capacidad;
   }, 0);
   
-  // Calcular kg totales (acumulado total * 0.625)
-  const kgTotales = acumuladoTotal * 0.625;
+  // Calcular kg totales (acumulado total * 0.25)
+  const kgTotales = acumuladoTotal * 0.25;
   
-  // Calcular remuneración (acumulado total * 0.02€/L)
-  const remuneracionTotal = acumuladoTotal * 0.02;
+  // Calcular remuneración (kg totales * 0.02€/kg)
+  const remuneracionTotal = kgTotales * 0.02;
+
 
   return (
-    <div className="stats-dashboard w-full space-y-6 px-2 sm:px-0">
+    <div className="w-full px-2 space-y-6 stats-dashboard sm:px-0">
       {/* Resumen general */}
-      <div className="bg-white shadow-md rounded-lg p-4 sm:p-6">
+      <div className="p-4 bg-white rounded-lg shadow-md sm:p-6">
         <div className="w-full">
-          <h2 className="text-xl font-semibold text-green-800 mb-4">Resumen General</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-green-50 p-4 rounded-lg text-center">
+          <h2 className="mb-4 text-xl font-semibold text-green-800">Resumen de Recogidas Completadas</h2>
+      
+          
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="p-4 text-center rounded-lg bg-green-50">
               <p className="text-sm text-green-800">Total Recogidas</p>
               <p className="text-2xl font-bold text-green-700">{totalRecogidas}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg text-center">
+            <div className="p-4 text-center rounded-lg bg-green-50">
               <p className="text-sm text-green-800">Tipos de Residuo</p>
               <p className="text-2xl font-bold text-green-700 truncate" title={tiposResiduoUnicos.join(', ')}>
-                {tiposResiduoUnicos.join(', ')}
+                {tiposResiduoUnicos.length > 0 ? tiposResiduoUnicos.join(', ') : "Ninguno"}
               </p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg text-center">
+            <div className="p-4 text-center rounded-lg bg-green-50">
               <p className="text-sm text-green-800">Kg Estimados</p>
-              <div className="text-2xl font-bold text-green-700 flex items-baseline justify-center">
+              <div className="flex items-baseline justify-center text-2xl font-bold text-green-700">
                 <span>{kgTotales.toFixed(1)}</span>
                 <span className="ml-1">kg</span>
               </div>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg text-center">
+            <div className="p-4 text-center rounded-lg bg-green-50">
               <p className="text-sm text-green-800">Remuneración</p>
               <p className="text-2xl font-bold text-green-700">{remuneracionTotal.toFixed(2)} €</p>
             </div>
@@ -114,33 +142,34 @@ const UserStats: React.FC<UserStatsProps> = ({ propietarioDni }) => {
         </div>
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Gráfico de Recogidas por Horario */}
-        <div className="w-full col-span-1 md:col-span-2">
-          <RecogidasHorario recogidas={recogidas} />
+      {/* Mostrar mensaje si no hay recogidas completadas */}
+      {recogidasCompletadas.length === 0 && (
+        <div className="p-6 text-center bg-white rounded-lg shadow-md">
+          <p className="text-lg text-green-700">
+            No hay recogidas completadas para mostrar. Solo se consideran recogidas con fecha de recogida real.
+          </p>
         </div>
-        
-        {/* Gráfico de Distribución de Contenedores */}
-      {/*   <div className="w-full h-full">
-          <ContenedoresChart recogidas={recogidas} />
-        </div>*/}
-        
-        {/* Gráfico de Capacidades de Contenedores */}
-        <div className="w-full h-full">
-          <CapacidadesContenedoresChart recogidas={recogidas} />
+      )}
+
+      {/* Gráficos (solo se muestran si hay recogidas completadas) */}
+      {recogidasCompletadas.length > 0 && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Gráfico de Recogidas por Horario */}
+          <div className="w-full col-span-1 md:col-span-2">
+            <RecogidasHorario recogidas={recogidasCompletadas} usuarioId={usuarioId} />
+          </div>
+          
+          {/* Gráfico de Capacidades de Contenedores */}
+          <div className="w-full h-full">
+            <CapacidadesContenedoresChart recogidas={recogidasCompletadas} usuarioId={usuarioId} />
+          </div>
+          
+          {/* Gráfico de Remuneración */}
+          <div className="w-full h-full">
+            <RemuneracionContenedores recogidas={recogidasCompletadas} usuarioId={usuarioId} />
+          </div>
         </div>
-        
-        {/* Gráfico de Remuneración */}
-        <div className="w-full h-full">
-          <RemuneracionContenedores recogidas={recogidas} />
-        </div>
-        
-        {/* Gráfico de Recogidas por Capacidad */}
-       {/* <div className="w-full h-full">
-          <RecogidasCapacidad recogidas={recogidas} />
-        </div> */}
-      </div>
+      )}
     </div>
   );
 };

@@ -15,27 +15,39 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
   const [tipoVisualizacion, setTipoVisualizacion] = useState<'tabla' | 'grafico'>('grafico');
   const [tipoGrafico, setTipoGrafico] = useState<'barra' | 'pie'>('barra');
   const [highlightedCapacidad, setHighlightedCapacidad] = useState<number | null>(null);
+  
+  // Filtrar recogidas con fechaRecogidaReal distinto de null
+  const recogidasCompletadas = useMemo(() => {
+    return recogidas.filter(recogida => recogida.fechaRecogidaReal !== null);
+  }, [recogidas]);
+
+  // Factor de conversión de litros a kg
+  const FACTOR_KG = 0.25; // 0,25 kg/L
 
   // Datos para la tabla y gráficos de remuneración
   const datosRemuneracion = useMemo(() => {
-    const capacidadesGroup = recogidas.reduce((acc, recogida) => {
-      const capacidad = recogida.contenedor.capacidad;
+    const capacidadesGroup = recogidasCompletadas.reduce((acc, recogida) => {
+      const capacidadLitros = recogida.contenedor.capacidad;
+      const capacidadKg = capacidadLitros * FACTOR_KG;
       
-      if (!acc[capacidad]) {
-        acc[capacidad] = {
-          capacidad,
+      if (!acc[capacidadLitros]) {
+        acc[capacidadLitros] = {
+          capacidadLitros,
+          capacidadKg,
           numContenedores: 0,
           remuneracion: 0,
           porcentaje: 0
         };
       }
       
-      acc[capacidad].numContenedores += 1;
-      // Remuneración es capacidad * 0.02€/L
-      acc[capacidad].remuneracion += capacidad * 0.02;
+      acc[capacidadLitros].numContenedores += 1;
+      // Remuneración es kg * 0,02
+      acc[capacidadLitros].remuneracion += capacidadKg * 0.02;
+      
       return acc;
     }, {} as Record<number, { 
-      capacidad: number; 
+      capacidadLitros: number;
+      capacidadKg: number; 
       numContenedores: number; 
       remuneracion: number;
       porcentaje: number;
@@ -51,26 +63,27 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
       item.porcentaje = (item.remuneracion / totalRemuneracion) * 100;
     });
     
-    return Object.values(capacidadesGroup).sort((a, b) => a.capacidad - b.capacidad);
+    return Object.values(capacidadesGroup).sort((a, b) => a.capacidadLitros - b.capacidadLitros);
   }, [recogidas]);
 
   // Datos formateados para el gráfico de barras
   const datosBarras = useMemo(() => {
     return datosRemuneracion.map(item => ({
-      name: `${item.capacidad} L`,
+      name: `${item.capacidadKg.toFixed(1)} kg`,
       Remuneración: Number(item.remuneracion.toFixed(2)),
       Contenedores: item.numContenedores,
-      fill: highlightedCapacidad === item.capacidad ? '#059669' : '#10B981'
+      fill: highlightedCapacidad === item.capacidadLitros ? '#059669' : '#10B981'
     }));
   }, [datosRemuneracion, highlightedCapacidad]);
 
   // Datos formateados para el gráfico de pie
   const datosPie = useMemo(() => {
     return datosRemuneracion.map(item => ({
-      name: `${item.capacidad} L`,
+      name: `${item.capacidadKg.toFixed(1)} kg`,
       value: Number(item.remuneracion.toFixed(2)),
       numContenedores: item.numContenedores,
-      capacidad: item.capacidad
+      capacidadLitros: item.capacidadLitros,
+      capacidadKg: item.capacidadKg
     }));
   }, [datosRemuneracion]);
 
@@ -86,16 +99,12 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
     );
   }, [datosRemuneracion]);
 
-  // Calcular capacidad más rentable
-  const capacidadMasRentable = useMemo(() => {
-    if (datosRemuneracion.length === 0) return 0;
-    
-    return datosRemuneracion.reduce((max, item) => {
-      const rentabilidadPorContenedor = item.remuneracion / item.numContenedores;
-      return rentabilidadPorContenedor > max.rentabilidad 
-        ? { capacidad: item.capacidad, rentabilidad: rentabilidadPorContenedor }
-        : max;
-    }, { capacidad: 0, rentabilidad: 0 }).capacidad;
+  // Calcular total acumulado de kg
+  const totalKgAcumulado = useMemo(() => {
+    return datosRemuneracion.reduce((total, item) => {
+      // Multiplicamos el número de contenedores por la capacidad en kg de cada uno
+      return total + (item.numContenedores * item.capacidadKg);
+    }, 0);
   }, [datosRemuneracion]);
 
   // Calcular remuneración media por contenedor
@@ -107,7 +116,8 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
   // Distribución visual de la remuneración
   const distribucionVisual = useMemo(() => {
     return datosRemuneracion.map(item => ({
-      capacidad: item.capacidad,
+      capacidadLitros: item.capacidadLitros,
+      capacidadKg: item.capacidadKg,
       porcentaje: item.porcentaje,
       remuneracion: item.remuneracion
     }));
@@ -117,12 +127,12 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
   const COLORS = ['#4ADE80', '#22C55E', '#16A34A', '#15803D', '#166534'];
 
   // Si no hay datos, mostrar mensaje
-  if (recogidas.length === 0) {
+  if (recogidasCompletadas.length === 0) {
     return (
       <div className="bg-white shadow-md rounded-lg p-6 h-full min-h-[600px] flex items-center justify-center">
         <div className="text-center text-gray-500">
           <DollarSign size={48} className="mx-auto mb-4 text-green-200" />
-          <h3 className="text-lg font-medium text-green-800 mb-1">Sin datos de remuneración</h3>
+          <h3 className="mb-1 text-lg font-medium text-green-800">Sin datos de remuneración</h3>
           <p>No hay información de remuneración disponible</p>
         </div>
       </div>
@@ -141,14 +151,14 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 h-full min-h-[600px] overflow-hidden">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold flex items-center text-green-800">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="flex items-center text-xl font-semibold text-green-800">
           <DollarSign className="mr-2 text-green-600" />
-          Remuneración por Capacidad
+          Remuneración por cantidad
         </h2>
 
         {/* Selector de visualización */}
-        <div className="flex bg-green-50 rounded-lg p-1">
+        <div className="flex p-1 rounded-lg bg-green-50">
           <button 
             className={`px-3 py-1 text-sm rounded-md transition-all ${
               tipoVisualizacion === 'grafico' ? 'bg-white text-green-700 shadow-sm' : 'text-green-600'
@@ -169,21 +179,21 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
       </div>
 
       {/* Resumen de totales en tarjetas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div className="bg-green-50 p-3 rounded-lg">
+      <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="p-3 rounded-lg bg-green-50">
           <p className="text-sm text-green-700">Total Contenedores</p>
           <p className="text-2xl font-bold text-green-800">{totales.totalContenedores}</p>
         </div>
-        <div className="bg-green-50 p-3 rounded-lg">
+        <div className="p-3 rounded-lg bg-green-50">
           <p className="text-sm text-green-700">Remuneración Total</p>
           <p className="text-2xl font-bold text-green-800">{totales.totalRemuneracion.toFixed(2)} €</p>
         </div>
-        <div className="bg-green-50 p-3 rounded-lg flex justify-between items-center">
+        <div className="flex items-center justify-between p-3 rounded-lg bg-green-50">
           <div>
-            <p className="text-sm text-green-700">Capacidad más Rentable</p>
-            <p className="text-2xl font-bold text-green-800">{capacidadMasRentable} L</p>
+            <p className="text-sm text-green-700">Total Acumulado</p>
+            <p className="text-2xl font-bold text-green-800">{totalKgAcumulado.toFixed(1)} kg</p>
           </div>
-          <div className="bg-green-200 p-2 rounded-full">
+          <div className="p-2 bg-green-200 rounded-full">
             <TrendingUp className="text-green-800" size={20} />
           </div>
         </div>
@@ -193,7 +203,7 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
         <div className="mb-6">
           {/* Selector de tipo de gráfico */}
           <div className="flex justify-center mb-4">
-            <div className="inline-flex items-center bg-green-50 rounded-lg p-1">
+            <div className="inline-flex items-center p-1 rounded-lg bg-green-50">
               <button
                 className={`flex items-center px-3 py-1 text-sm rounded-md transition-all ${
                   tipoGrafico === 'barra' 
@@ -249,8 +259,13 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
                     radius={[4, 4, 0, 0]}
                     animationDuration={1500}
                     onMouseEnter={(data) => {
-                      const capacidad = parseInt(data.name);
-                      setHighlightedCapacidad(capacidad);
+                      // Encontrar capacidad en litros correspondiente
+                      const datosItem = datosRemuneracion.find(
+                        item => `${item.capacidadKg.toFixed(1)} kg` === data.name
+                      );
+                      if (datosItem) {
+                        setHighlightedCapacidad(datosItem.capacidadLitros);
+                      }
                     }}
                     onMouseLeave={() => setHighlightedCapacidad(null)}
                   />
@@ -271,7 +286,7 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
                     label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     animationDuration={1500}
                     onMouseEnter={(_, index) => {
-                      const capacidad = datosPie[index].capacidad;
+                      const capacidad = datosPie[index].capacidadLitros;
                       setHighlightedCapacidad(capacidad);
                     }}
                     onMouseLeave={() => setHighlightedCapacidad(null)}
@@ -279,7 +294,7 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
                     {datosPie.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
-                        fill={highlightedCapacidad === entry.capacidad ? 
+                        fill={highlightedCapacidad === entry.capacidadLitros ? 
                           '#059669' : COLORS[index % COLORS.length]} 
                       />
                     ))}
@@ -307,11 +322,11 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
       )}
       
       {tipoVisualizacion === 'tabla' && (
-        <div className="overflow-x-auto mb-6 animate-fadeIn">
+        <div className="mb-6 overflow-x-auto animate-fadeIn">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="bg-green-100">
-                <th className="p-2 text-left text-green-800">Capacidad (L)</th>
+                <th className="p-2 text-left text-green-800">Peso (kg)</th>
                 <th className="p-2 text-center text-green-800">Nº Contenedores</th>
                 <th className="p-2 text-right text-green-800">Remuneración (€)</th>
                 <th className="p-2 text-right text-green-800">% del Total</th>
@@ -320,14 +335,14 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
             <tbody>
               {datosRemuneracion.map((item) => (
                 <tr 
-                  key={item.capacidad} 
+                  key={item.capacidadLitros} 
                   className={`border-b border-green-100 transition-colors hover:bg-green-50 ${
-                    highlightedCapacidad === item.capacidad ? 'bg-green-50' : ''
+                    highlightedCapacidad === item.capacidadLitros ? 'bg-green-50' : ''
                   }`}
-                  onMouseEnter={() => handleDistribucionHover(item.capacidad)}
+                  onMouseEnter={() => handleDistribucionHover(item.capacidadLitros)}
                   onMouseLeave={handleDistribucionLeave}
                 >
-                  <td className="p-2 text-green-700">{item.capacidad} L</td>
+                  <td className="p-2 text-green-700">{item.capacidadKg.toFixed(1)} kg</td>
                   <td className="p-2 text-center text-green-700">{item.numContenedores}</td>
                   <td className="p-2 text-right text-green-700">{item.remuneracion.toFixed(2)} €</td>
                   <td className="p-2 text-right text-green-700">{item.porcentaje.toFixed(1)}%</td>
@@ -337,9 +352,9 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
             <tfoot>
               <tr className="bg-green-100">
                 <td className="p-2 font-medium text-green-800">Total</td>
-                <td className="p-2 text-center font-medium text-green-800">{totales.totalContenedores}</td>
-                <td className="p-2 text-right font-medium text-green-800">{totales.totalRemuneracion.toFixed(2)} €</td>
-                <td className="p-2 text-right font-medium text-green-800">100%</td>
+                <td className="p-2 font-medium text-center text-green-800">{totales.totalContenedores}</td>
+                <td className="p-2 font-medium text-right text-green-800">{totales.totalRemuneracion.toFixed(2)} €</td>
+                <td className="p-2 font-medium text-right text-green-800">100%</td>
               </tr>
             </tfoot>
           </table>
@@ -348,68 +363,68 @@ export const RemuneracionContenedores: React.FC<RemuneracionContenedoresProps> =
       
       {/* Distribución visual de remuneración */}
       <div className="mb-6">
-        <h3 className="text-lg font-medium mb-3 text-green-700">Distribución de Remuneración</h3>
-        <div className="h-8 bg-gray-100 rounded-full overflow-hidden flex">
+        <h3 className="mb-3 text-lg font-medium text-green-700">Distribución de Remuneración</h3>
+        <div className="flex h-8 overflow-hidden bg-gray-100 rounded-full">
           {distribucionVisual.map((item, index) => (
             <div 
-              key={item.capacidad}
-              className="h-full flex items-center justify-center text-xs text-white font-medium transition-all"
+              key={item.capacidadLitros}
+              className="flex items-center justify-center h-full text-xs font-medium text-white transition-all"
               style={{ 
                 width: `${item.porcentaje}%`, 
-                backgroundColor: highlightedCapacidad === item.capacidad 
+                backgroundColor: highlightedCapacidad === item.capacidadLitros 
                   ? '#059669' : getColorForIndex(index),
                 transition: 'all 0.3s ease-in-out',
-                transform: highlightedCapacidad === item.capacidad ? 'scaleY(1.15)' : 'scaleY(1)'
+                transform: highlightedCapacidad === item.capacidadLitros ? 'scaleY(1.15)' : 'scaleY(1)'
               }}
-              title={`${item.capacidad}L: ${item.remuneracion.toFixed(2)}€`}
-              onMouseEnter={() => handleDistribucionHover(item.capacidad)}
+              title={`${item.capacidadKg.toFixed(1)} kg: ${item.remuneracion.toFixed(2)}€`}
+              onMouseEnter={() => handleDistribucionHover(item.capacidadLitros)}
               onMouseLeave={handleDistribucionLeave}
             >
-              {item.porcentaje > 5 && `${item.capacidad}L: ${item.remuneracion.toFixed(2)}€`}
+              {item.porcentaje > 5 && `${item.capacidadKg.toFixed(1)} kg: ${item.remuneracion.toFixed(2)}€`}
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap mt-2 text-xs gap-2">
+        <div className="flex flex-wrap gap-2 mt-2 text-xs">
           {distribucionVisual.map((item, index) => (
             <div 
-              key={item.capacidad} 
+              key={item.capacidadLitros} 
               className={`flex items-center p-1 rounded-md transition-colors ${
-                highlightedCapacidad === item.capacidad ? 'bg-green-100' : ''
+                highlightedCapacidad === item.capacidadLitros ? 'bg-green-100' : ''
               }`}
-              onMouseEnter={() => handleDistribucionHover(item.capacidad)}
+              onMouseEnter={() => handleDistribucionHover(item.capacidadLitros)}
               onMouseLeave={handleDistribucionLeave}
             >
               <div 
-                className="w-3 h-3 rounded-full mr-1" 
+                className="w-3 h-3 mr-1 rounded-full" 
                 style={{ 
                   backgroundColor: getColorForIndex(index),
                   transition: 'transform 0.2s ease',
-                  transform: highlightedCapacidad === item.capacidad ? 'scale(1.2)' : 'scale(1)'
+                  transform: highlightedCapacidad === item.capacidadLitros ? 'scale(1.2)' : 'scale(1)'
                 }}
               ></div>
-              <span className="text-green-700">{item.capacidad}L: {item.remuneracion.toFixed(2)}€</span>
+              <span className="text-green-700">{item.capacidadKg.toFixed(1)} kg: {item.remuneracion.toFixed(2)}€</span>
             </div>
           ))}
         </div>
       </div>
       
       {/* Información adicional */}
-      <div className="bg-green-50 p-4 rounded-lg">
-        <h3 className="font-medium mb-3 text-green-800">Información Adicional</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-green-600">Capacidad más rentable</p>
+      <div className="p-4 rounded-lg bg-green-50">
+        <h3 className="mb-3 font-medium text-green-800">Información Adicional</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="p-3 bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-green-600">Total Acumulado</p>
               <ArrowUpRight className="text-green-500" size={16} />
             </div>
-            <p className="text-xl font-semibold text-green-700 mt-1">{capacidadMasRentable} L</p>
+            <p className="mt-1 text-xl font-semibold text-green-700">{totalKgAcumulado.toFixed(1)} kg</p>
           </div>
-          <div className="bg-white p-3 rounded-lg shadow-sm">
-            <div className="flex justify-between items-center">
+          <div className="p-3 bg-white rounded-lg shadow-sm">
+            <div className="flex items-center justify-between">
               <p className="text-sm text-green-600">Remuneración media por contenedor</p>
               <ArrowUpRight className="text-green-500" size={16} />
             </div>
-            <p className="text-xl font-semibold text-green-700 mt-1">{remuneracionMedia.toFixed(2)} €</p>
+            <p className="mt-1 text-xl font-semibold text-green-700">{remuneracionMedia.toFixed(2)} €</p>
           </div>
         </div>
       </div>

@@ -55,17 +55,17 @@ const ResumenPeriodoCard = ({
       >
         <div className="flex items-center">
           <div 
-            className="w-4 h-4 rounded-full mr-3" 
+            className="w-4 h-4 mr-3 rounded-full" 
             style={{ backgroundColor: color }}
           ></div>
           <h4 className="font-medium text-green-800">{periodo}</h4>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-green-700 text-sm hidden sm:inline">
+          <span className="hidden text-sm text-green-700 sm:inline">
             {data.total} recogidas
           </span>
           <button 
-            className="text-green-600 hover:text-green-800 transition-colors"
+            className="text-green-600 transition-colors hover:text-green-800"
             aria-label={expandido ? "Colapsar detalles" : "Expandir detalles"}
           >
             {expandido ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -74,13 +74,13 @@ const ResumenPeriodoCard = ({
       </div>
       
       {expandido && (
-        <div className="p-4 bg-white text-green-700 animate-fadeIn">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div className="bg-green-50 p-3 rounded">
+        <div className="p-4 text-green-700 bg-white animate-fadeIn">
+          <div className="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-2">
+            <div className="p-3 rounded bg-green-50">
               <p className="text-sm text-green-600">Total Recogidas</p>
               <p className="text-xl font-semibold">{data.total}</p>
             </div>
-            <div className="bg-green-50 p-3 rounded">
+            <div className="p-3 rounded bg-green-50">
               <p className="text-sm text-green-600">Capacidad Total</p>
               <p className="text-xl font-semibold">{data.capacidadTotal} L</p>
             </div>
@@ -88,7 +88,7 @@ const ResumenPeriodoCard = ({
           
           {tiposResiduo.length > 0 && (
             <div>
-              <p className="text-green-800 font-medium text-sm mb-2">Por tipo de residuo:</p>
+              <p className="mb-2 text-sm font-medium text-green-800">Por tipo de residuo:</p>
               <div className="space-y-2">
                 {tiposResiduo.map(([tipoId, cantidad]) => {
                   // Asumiendo que tipoId es realmente el ID numérico
@@ -99,7 +99,7 @@ const ResumenPeriodoCard = ({
                     : getNombreResiduoPorId(tipoIdNumerico);
                   
                   return (
-                    <div key={tipoId} className="flex justify-between bg-green-50/50 p-2 rounded">
+                    <div key={tipoId} className="flex justify-between p-2 rounded bg-green-50/50">
                       <span>{nombreFormateado || tipoId}:</span>
                       <span className="font-medium">
                         {cantidad} {cantidad === 1 ? 'recogida' : 'recogidas'}
@@ -116,12 +116,30 @@ const ResumenPeriodoCard = ({
   );
 };
 
-export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogidas }) => {
+export const RecogidasHorario: React.FC<{ 
+  recogidas: Recogida[]; 
+  usuarioId?: number // ID del usuario actual, opcional
+}> = ({ recogidas, usuarioId }) => {
   const [activeChart, setActiveChart] = useState<'bar' | 'pie'>('bar');
   const [showDetalles, setShowDetalles] = useState(false);
 
+  // Filtrar recogidas: solo aquellas asociadas al usuario actual (si se proporciona usuarioId)
+  // y que tengan fechaRecogidaReal distinto de null
+  const recogidasFiltradas = recogidas.filter(recogida => {
+    // Verificar si la fechaRecogidaReal no es null
+    const tieneFechaRecogida = recogida.fechaRecogidaReal !== null;
+    
+    // Si se proporciona usuarioId, verificar si la recogida está asociada a ese usuario
+    const esDelUsuario = usuarioId 
+      ? recogida.usuarioId === usuarioId || recogida.usuario?.id === usuarioId
+      : true; // Si no se proporciona usuarioId, consideramos todas las recogidas
+    
+    // La recogida debe cumplir ambas condiciones
+    return tieneFechaRecogida && esDelUsuario;
+  });
+
   // Agrupar recogidas por periodo del día
-  const recogidaPorPeriodo = recogidas.reduce((acc, recogida) => {
+  const recogidaPorPeriodo = recogidasFiltradas.reduce((acc, recogida) => {
     const periodoDia = getPeriodoDia(recogida);
     
     if (!acc[periodoDia]) {
@@ -188,11 +206,26 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
     animationEasing: 'ease' as AnimationTiming
   };
 
-  // Si no hay datos, mostrar mensaje informativo
+  // Si no hay datos filtrados, mostrar mensaje informativo
+  if (recogidasFiltradas.length === 0) {
+    return (
+      <div className="p-6 transition-all duration-300 bg-white rounded-lg shadow-md">
+        <h2 className="flex items-center mb-4 text-xl font-semibold text-green-800">
+          <Clock className="mr-2 text-green-600" />
+          Recogidas por Horario
+        </h2>
+        <div className="py-8 text-center text-green-700">
+          No hay recogidas completadas para mostrar. Solo se muestran recogidas con fecha de recogida real.
+        </div>
+      </div>
+    );
+  }
+
+  // Si no hay datos agrupados por periodo, mostrar mensaje informativo
   if (periodosOrdenados.length === 0) {
     return (
-      <div className="bg-white shadow-md rounded-lg p-6 transition-all duration-300">
-        <h2 className="text-xl font-semibold mb-4 flex items-center text-green-800">
+      <div className="p-6 transition-all duration-300 bg-white rounded-lg shadow-md">
+        <h2 className="flex items-center mb-4 text-xl font-semibold text-green-800">
           <Clock className="mr-2 text-green-600" />
           Recogidas por Horario
         </h2>
@@ -204,15 +237,15 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
   }
 
   return (
-    <div className="bg-white shadow-md rounded-lg p-6 transition-all duration-300">
-      <h2 className="text-xl font-semibold mb-6 flex items-center text-green-800">
+    <div className="p-6 transition-all duration-300 bg-white rounded-lg shadow-md">
+      <h2 className="flex items-center mb-6 text-xl font-semibold text-green-800">
         <Clock className="mr-2 text-green-600" />
-        Recogidas por Horario
+        Recogidas Completadas por Horario
       </h2>
 
       {/* Selector de tipo de gráfico */}
       <div className="flex justify-center mb-6">
-        <div className="inline-flex items-center bg-green-50 rounded-lg p-1">
+        <div className="inline-flex items-center p-1 rounded-lg bg-green-50">
           <button
             className={`flex items-center px-4 py-2 rounded-md transition-all ${
               activeChart === 'bar' 
@@ -239,8 +272,8 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
       </div>
 
       {/* Contenedor del gráfico */}
-      <div className="bg-white rounded-lg mb-6">
-        <div className="h-80 w-full">
+      <div className="mb-6 bg-white rounded-lg">
+        <div className="w-full h-80">
           {activeChart === 'bar' ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
@@ -267,7 +300,7 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
                     if (active && payload && payload.length) {
                       const data = payload[0].payload;
                       return (
-                        <div className="bg-white p-4 shadow-lg rounded-md border border-green-100">
+                        <div className="p-4 bg-white border border-green-100 rounded-md shadow-lg">
                           <p className="font-bold text-green-800">{data.nombre}</p>
                           <p className="text-green-700">Total Recogidas: {data.total}</p>
                           <p className="text-green-700">Capacidad Total: {data.capacidad} L</p>
@@ -324,11 +357,11 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
       </div>
 
       {/* Tabla de resumen */}
-      <div className="bg-green-50 p-4 rounded-lg mb-6 overflow-x-auto">
-        <div className="flex justify-between items-center mb-3">
+      <div className="p-4 mb-6 overflow-x-auto rounded-lg bg-green-50">
+        <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-green-800">Resumen por Periodo</h3>
           <div className="text-sm text-green-700">
-            Total: <span className="font-medium">{totalRecogidas} recogidas</span>
+            Total: <span className="font-medium">{totalRecogidas} recogidas completadas</span>
           </div>
         </div>
         <table className="w-full text-sm">
@@ -346,11 +379,11 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
               const porcentaje = (data.total / totalRecogidas) * 100;
 
               return (
-                <tr key={periodo} className="border-b border-green-100 hover:bg-green-100/50 transition-colors">
+                <tr key={periodo} className="transition-colors border-b border-green-100 hover:bg-green-100/50">
                   <td className="p-2 text-green-700">
                     <div className="flex items-center">
                       <div 
-                        className="w-3 h-3 rounded-full mr-2" 
+                        className="w-3 h-3 mr-2 rounded-full" 
                         style={{ backgroundColor: COLORS[periodo as keyof typeof COLORS] }}
                       ></div>
                       {periodo}
@@ -366,9 +399,9 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
           <tfoot>
             <tr className="bg-green-100">
               <td className="p-2 font-medium text-green-800">Total</td>
-              <td className="p-2 text-center font-medium text-green-800">{totalRecogidas}</td>
-              <td className="p-2 text-center font-medium text-green-800">100%</td>
-              <td className="p-2 text-right font-medium text-green-800">{totalCapacidad}</td>
+              <td className="p-2 font-medium text-center text-green-800">{totalRecogidas}</td>
+              <td className="p-2 font-medium text-center text-green-800">100%</td>
+              <td className="p-2 font-medium text-right text-green-800">{totalCapacidad}</td>
             </tr>
           </tfoot>
         </table>
@@ -378,7 +411,7 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
       <div className="flex justify-center mb-4">
         <button
           onClick={() => setShowDetalles(!showDetalles)}
-          className="flex items-center px-4 py-2 rounded-md bg-green-50 text-green-700 hover:bg-green-100 transition-all"
+          className="flex items-center px-4 py-2 text-green-700 transition-all rounded-md bg-green-50 hover:bg-green-100"
         >
           {showDetalles ? (
             <>
@@ -396,7 +429,7 @@ export const RecogidasHorario: React.FC<{ recogidas: Recogida[] }> = ({ recogida
 
       {/* Detalles por periodo (expandibles) */}
       {showDetalles && (
-        <div className="mt-4 grid grid-cols-1 gap-4 animate-fadeIn">
+        <div className="grid grid-cols-1 gap-4 mt-4 animate-fadeIn">
           {periodosOrdenados.map(periodo => (
             <ResumenPeriodoCard
               key={periodo}

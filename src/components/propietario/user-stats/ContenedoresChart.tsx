@@ -10,21 +10,35 @@ import { Recogida } from './tipos';
 
 interface ContenedoresChartProps {
   recogidas: Recogida[];
+  usuarioId?: number; // ID del usuario actual (opcional)
 }
 
-export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas }) => {
+export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas, usuarioId }) => {
   // Estados para interactividad
   const [visualizacion, setVisualizacion] = useState<'grafico' | 'tabla'>('grafico');
   const [tipoGrafico, setTipoGrafico] = useState<'anillo' | 'barra'>('anillo');
   const [seccionActiva, setSeccionActiva] = useState<'tamano' | 'tipo'>('tamano');
   const [selectedCapacidad, setSelectedCapacidad] = useState<number | null>(null);
 
+  // Filtrar las recogidas para mostrar solo las asociadas al usuario y con fechaRecogidareal no nulo
+  const recogidasFiltradas = useMemo(() => {
+    return recogidas.filter(recogida => {
+      // Verificar que la recogida tenga fechaRecogidareal distinto de null
+      const tieneFechaRecogida = recogida.fechaRecogidareal !== null;
+      
+      // Si se proporciona un usuarioId, verificar que la recogida esté asociada a ese usuario
+      const perteneceAlUsuario = !usuarioId || (recogida.usuario && recogida.usuario.id === usuarioId);
+      
+      return tieneFechaRecogida && perteneceAlUsuario;
+    });
+  }, [recogidas, usuarioId]);
+
   // Colores para los gráficos
   const COLORS = ['#4ADE80', '#22C55E', '#16A34A', '#15803D', '#166534'];
   
   // Datos para el gráfico de cantidad por tamaño
   const cantidadPorTamano = useMemo(() => {
-    const capacidadesCount = recogidas.reduce((acc, recogida) => {
+    const capacidadesCount = recogidasFiltradas.reduce((acc, recogida) => {
       const capacidad = recogida.contenedor.capacidad;
       acc[capacidad] = (acc[capacidad] || 0) + 1;
       return acc;
@@ -36,11 +50,11 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
       capacidad: Number(capacidad),
       fill: selectedCapacidad === Number(capacidad) ? '#059669' : undefined
     })).sort((a, b) => a.capacidad - b.capacidad);
-  }, [recogidas, selectedCapacidad]);
+  }, [recogidasFiltradas, selectedCapacidad]);
 
   // Datos para el gráfico de capacidad total por tipo
   const capacidadPorTipo = useMemo(() => {
-    const tiposCapacidad = recogidas.reduce((acc, recogida) => {
+    const tiposCapacidad = recogidasFiltradas.reduce((acc, recogida) => {
       const tipoId = recogida.contenedor.tipoResiduo.id;
       const capacidad = recogida.contenedor.capacidad;
       
@@ -64,7 +78,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
       cantidad: tipo.cantidad,
       id: tipo.id
     }));
-  }, [recogidas]);
+  }, [recogidasFiltradas]);
 
   // Datos para gráfico de barras
   const datosBarras = useMemo(() => {
@@ -85,7 +99,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
 
   // Datos para la tabla de resumen
   const datosPorCapacidad = useMemo(() => {
-    const capacidadesGroup = recogidas.reduce((acc, recogida) => {
+    const capacidadesGroup = recogidasFiltradas.reduce((acc, recogida) => {
       const capacidad = recogida.contenedor.capacidad;
       
       if (!acc[capacidad]) {
@@ -114,7 +128,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
     });
     
     return Object.values(capacidadesGroup).sort((a, b) => a.capacidad - b.capacidad);
-  }, [recogidas]);
+  }, [recogidasFiltradas]);
 
   // Cálculo de totales
   const totales = useMemo(() => {
@@ -131,10 +145,12 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
   // Cálculo de estadísticas adicionales
   const estadisticas = useMemo(() => {
     // Capacidad media
-    const capacidadMedia = totales.totalCapacidad / totales.totalCantidad;
+    const capacidadMedia = totales.totalCantidad > 0 ? totales.totalCapacidad / totales.totalCantidad : 0;
     
     // Capacidad más común
-    const capacidadMasComun = [...datosPorCapacidad].sort((a, b) => b.cantidad - a.cantidad)[0]?.capacidad || 0;
+    const capacidadMasComun = datosPorCapacidad.length > 0 
+      ? [...datosPorCapacidad].sort((a, b) => b.cantidad - a.cantidad)[0]?.capacidad || 0
+      : 0;
     
     return {
       capacidadMedia,
@@ -143,13 +159,13 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
   }, [datosPorCapacidad, totales]);
   
   // Si no hay datos, mostrar mensaje
-  if (recogidas.length === 0) {
+  if (recogidasFiltradas.length === 0) {
     return (
       <div className="bg-white shadow-md rounded-lg p-6 h-full min-h-[600px] flex items-center justify-center">
         <div className="text-center text-gray-500">
           <Package size={48} className="mx-auto mb-4 text-green-200" />
-          <h3 className="text-lg font-medium text-green-800 mb-1">Sin datos de contenedores</h3>
-          <p>No hay información de contenedores disponible</p>
+          <h3 className="mb-1 text-lg font-medium text-green-800">Sin datos de contenedores</h3>
+          <p>No hay recogidas completadas disponibles para mostrar</p>
         </div>
       </div>
     );
@@ -157,14 +173,14 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 h-full min-h-[600px]">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-green-800 flex items-center">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="flex items-center text-xl font-semibold text-green-800">
           <Package className="mr-2 text-green-600" />
-          Distribución de Contenedores
+          Distribución de Contenedores Recogidos
         </h2>
 
         {/* Selector de visualización */}
-        <div className="flex bg-green-50 rounded-lg p-1">
+        <div className="flex p-1 rounded-lg bg-green-50">
           <button 
             className={`px-3 py-1 text-sm rounded-md transition-all ${
               visualizacion === 'grafico' ? 'bg-white text-green-700 shadow-sm' : 'text-green-600'
@@ -187,8 +203,8 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
       </div>
 
       {/* Tarjetas de resumen */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <div className="bg-green-50 p-3 rounded-lg flex items-center">
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex items-center p-3 rounded-lg bg-green-50">
           <div className="p-2 mr-3 bg-green-100 rounded-full">
             <Package size={20} className="text-green-700" />
           </div>
@@ -197,7 +213,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
             <p className="text-xl font-semibold text-green-800">{totales.totalCantidad}</p>
           </div>
         </div>
-        <div className="bg-green-50 p-3 rounded-lg flex items-center">
+        <div className="flex items-center p-3 rounded-lg bg-green-50">
           <div className="p-2 mr-3 bg-green-100 rounded-full">
             <Layers size={20} className="text-green-700" />
           </div>
@@ -206,11 +222,11 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
             <p className="text-xl font-semibold text-green-800">{totales.totalCapacidad} L</p>
           </div>
         </div>
-        <div className="bg-green-50 p-3 rounded-lg">
+        <div className="p-3 rounded-lg bg-green-50">
           <p className="text-xs text-green-600">Capacidad Media</p>
           <p className="text-xl font-semibold text-green-800">{estadisticas.capacidadMedia.toFixed(0)} L</p>
         </div>
-        <div className="bg-green-50 p-3 rounded-lg">
+        <div className="p-3 rounded-lg bg-green-50">
           <p className="text-xs text-green-600">Capacidad más Común</p>
           <p className="text-xl font-semibold text-green-800">{estadisticas.capacidadMasComun} L</p>
         </div>
@@ -219,8 +235,8 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
       {visualizacion === 'grafico' && (
         <div>
           {/* Pestañas para cambiar entre visualizaciones */}
-          <div className="flex justify-between items-center mb-2">
-            <div className="border-b border-green-100 flex">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex border-b border-green-100">
               <button
                 className={`px-4 py-2 text-sm ${
                   seccionActiva === 'tamano' 
@@ -244,7 +260,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
             </div>
 
             {/* Selector de tipo de gráfico */}
-            <div className="flex bg-green-50 rounded-lg p-1">
+            <div className="flex p-1 rounded-lg bg-green-50">
               <button
                 className={`px-3 py-1 text-xs rounded-md flex items-center ${
                   tipoGrafico === 'anillo' 
@@ -271,7 +287,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
           </div>
 
           {/* Contenedor del gráfico */}
-          <div className="bg-white rounded-lg p-2 mb-6">
+          <div className="p-2 mb-6 bg-white rounded-lg">
             <div className="h-64">
               {tipoGrafico === 'anillo' ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -390,7 +406,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
 
       {visualizacion === 'tabla' && (
         <div className="overflow-x-auto animate-fadeIn">
-          <table className="min-w-full text-sm mb-6">
+          <table className="min-w-full mb-6 text-sm">
             <thead>
               <tr className="bg-green-100">
                 <th className="p-2 text-left text-green-800">Capacidad</th>
@@ -421,10 +437,10 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
             <tfoot>
               <tr className="bg-green-100">
                 <td className="p-2 font-medium text-green-800">Total</td>
-                <td className="p-2 text-center font-medium text-green-800">{totales.totalCantidad}</td>
-                <td className="p-2 text-center font-medium text-green-800">100%</td>
+                <td className="p-2 font-medium text-center text-green-800">{totales.totalCantidad}</td>
+                <td className="p-2 font-medium text-center text-green-800">100%</td>
                 <td className="p-2 font-medium text-green-800">Total</td>
-                <td className="p-2 text-right font-medium text-green-800">{totales.totalCapacidad} L</td>
+                <td className="p-2 font-medium text-right text-green-800">{totales.totalCapacidad} L</td>
               </tr>
             </tfoot>
           </table>
@@ -433,12 +449,12 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
       
       {/* Distribución visual */}
       <div className="mb-4">
-        <h3 className="text-sm font-medium mb-2 text-green-700">Distribución por Tamaño</h3>
-        <div className="h-8 bg-gray-100 rounded-full overflow-hidden flex">
+        <h3 className="mb-2 text-sm font-medium text-green-700">Distribución por Tamaño</h3>
+        <div className="flex h-8 overflow-hidden bg-gray-100 rounded-full">
           {datosPorCapacidad.map((item, index) => (
             <div 
               key={item.capacidad}
-              className="h-full flex items-center justify-center text-xs text-white font-medium transition-all"
+              className="flex items-center justify-center h-full text-xs font-medium text-white transition-all"
               style={{ 
                 width: `${item.porcentaje}%`, 
                 backgroundColor: selectedCapacidad === item.capacidad 
@@ -454,7 +470,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap mt-2 gap-2">
+        <div className="flex flex-wrap gap-2 mt-2">
           {datosPorCapacidad.map((item, index) => (
             <div 
               key={item.capacidad} 
@@ -465,7 +481,7 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
               onMouseLeave={() => setSelectedCapacidad(null)}
             >
               <div 
-                className="w-3 h-3 rounded-full mr-1" 
+                className="w-3 h-3 mr-1 rounded-full" 
                 style={{ 
                   backgroundColor: COLORS[index % COLORS.length],
                   transition: 'transform 0.2s ease',
@@ -480,14 +496,14 @@ export const ContenedoresChart: React.FC<ContenedoresChartProps> = ({ recogidas 
 
       {/* Resumen por tipo de residuo */}
       {capacidadPorTipo.length > 0 && (
-        <div className="bg-green-50 p-4 rounded-lg">
-          <h3 className="font-medium mb-3 text-green-800">Resumen por Tipo de Residuo</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 rounded-lg bg-green-50">
+          <h3 className="mb-3 font-medium text-green-800">Resumen por Tipo de Residuo</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {capacidadPorTipo.map((tipo, index) => (
-              <div key={tipo.name} className="bg-white p-3 rounded-lg shadow-sm">
+              <div key={tipo.name} className="p-3 bg-white rounded-lg shadow-sm">
                 <div className="flex items-center mb-2">
                   <div 
-                    className="w-4 h-4 rounded-full mr-2" 
+                    className="w-4 h-4 mr-2 rounded-full" 
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                   ></div>
                   <p className="font-medium text-green-700">{tipo.name}</p>

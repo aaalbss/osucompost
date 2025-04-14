@@ -11,16 +11,16 @@ export default function AreaCliente() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8]">
-      <header className="bg-white shadow-md py-4 fixed top-0 w-full z-50">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex-1 flex justify-center">
+      <header className="fixed top-0 z-50 w-full py-4 bg-white shadow-md">
+        <div className="container flex items-center justify-between px-4 mx-auto">
+          <div className="flex justify-center flex-1">
             <Link href="/">
               <Title text="OSUCOMPOST" />
             </Link>
           </div>
           <Link 
             href="/" 
-            className="p-2 hover:bg-green-100 rounded-full transition-colors"
+            className="p-2 transition-colors rounded-full hover:bg-green-100"
             aria-label="Ir a página principal"
           >
             <Home size={24} className="text-green-800" />
@@ -29,14 +29,14 @@ export default function AreaCliente() {
       </header>
 
       <div
-        className="fixed inset-0 w-full h-screen bg-cover bg-center bg-no-repeat filter blur-sm opacity-75"
+        className="fixed inset-0 w-full h-screen bg-center bg-no-repeat bg-cover opacity-75 filter blur-sm"
         style={{
-          backgroundImage: "url(/images/userZone.jpg)",
+          backgroundImage: "url(/images/areacliente.png)",
         }}
       ></div>
 
-      <div className="pt-20 flex justify-center items-center">
-        <div className="bg-white/50 backdrop-blur-sm p-8 rounded-lg shadow-xl w-full max-w-md">
+      <div className="flex items-center justify-center pt-20">
+        <div className="w-full max-w-md p-8 rounded-lg shadow-xl bg-white/50 backdrop-blur-sm">
           <h2 className="text-3xl font-bold mb-6 text-center text-[#2f4f27]">
             {isLogin ? "Iniciar Sesión" : "Registrarse"}
           </h2>

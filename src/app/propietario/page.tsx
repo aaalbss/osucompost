@@ -22,7 +22,6 @@ import {
   fetchPropietarioData,
   fetchPropietarioBasicData,
 } from "@/lib/dataFetcher";
-import { formatearFecha } from "@/lib/dateUtils";
 
 // Tiempo máximo de carga antes de mostrar error
 const LOADING_TIMEOUT = 15000; // 15 segundos
@@ -281,13 +280,13 @@ export default function PropietarioPage() {
       <div className="relative min-h-screen">
         <div className="fixed top-0 left-0 w-full h-full bg-gradient-to-b from-white via-[#E8EFE2] to-white"></div>
         <div className="relative z-10 flex items-center justify-center h-screen">
-          <div className="bg-white p-8 rounded-lg shadow-lg">
-            <p className="text-gray-700 text-xl">
+          <div className="p-8 bg-white rounded-lg shadow-lg">
+            <p className="text-xl text-gray-700">
               No se pudo obtener la información del propietario.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-4 bg-green-800 text-white px-4 py-2 rounded hover:bg-green-900 transition-colors"
+              className="px-4 py-2 mt-4 text-white transition-colors bg-green-800 rounded hover:bg-green-900"
             >
               Reintentar
             </button>
@@ -313,18 +312,18 @@ export default function PropietarioPage() {
           onUnregister={confirmarBaja}
         />
 
-        <main className="container mx-auto p-8 space-y-8">
+        <main className="container p-8 mx-auto space-y-8">
           {/* Botón nuevo para solicitar recogida */}
           <div className="flex justify-center mb-8">
             <button 
-              onClick={() => router.push('/propietario/solicitud-recogida')}
-              className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium"
+              onClick={() => router.push('/propietario/nueva-recogida')}
+              className="px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
             >
-              Solicitar Recogida Puntual
+              Añadir nuevo contendor
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             {/* PersonalInfoCard con tipo de contenedor */}
             <PersonalInfoCard
               propietario={propietario}
@@ -332,7 +331,9 @@ export default function PropietarioPage() {
             />
 
             <StatsCard recogidas={recogidas} />
-            <PickupPointsCard puntosRecogida={puntosRecogida} />
+            <PickupPointsCard
+             puntosRecogida={puntosRecogida} 
+             contenedores = {contenedores}/>
             <BillingCard facturaciones={facturaciones} />
             
             <div className="md:col-span-2">
