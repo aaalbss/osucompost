@@ -60,7 +60,7 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
       {/* Overlay para dispositivos móviles */}
       {menuAbierto && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 md:hidden"
           onClick={() => setMenuAbierto(false)}
         ></div>
       )}
@@ -73,42 +73,42 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
             : isMobile ? '-translate-x-full' : 'translate-x-full'
         } transition-transform duration-300 ease-in-out z-50`}
       >
-        <div className="p-4 flex flex-col h-full">
-          <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col h-full p-4">
+          <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-800">Menú</h3>
             <button 
               onClick={() => setMenuAbierto(false)}
               className="p-1 rounded-full hover:bg-gray-100"
             >
-              <X className="h-6 w-6 text-gray-600" />
+              <X className="w-6 h-6 text-gray-600" />
             </button>
           </div>
           
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex flex-col flex-1 gap-4">
             {/* Botón de Inicio */}
             <button 
               onClick={() => handleActionClick('home')}
-              className="py-2 px-4 bg-green-800/10 text-green-800 rounded-md hover:bg-green-200 transition duration-300 flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md bg-green-800/10 hover:bg-green-200"
             >
-              <Home className="h-5 w-5" />
+              <Home className="w-5 h-5" />
               Ir a Inicio
             </button>
             
             {/* Cerrar Sesión */}
             <button 
               onClick={() => handleActionClick('logout')}
-              className="py-2 px-4 bg-green-800/10 text-green-800 rounded-md hover:bg-green-200 transition duration-300 flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md bg-green-800/10 hover:bg-green-200"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="w-5 h-5" />
               Cerrar Sesión
             </button>
             
             {/* Darse de Baja */}
             <button 
               onClick={() => handleActionClick('unregister')}
-              className="py-2 px-4 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition duration-300 flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 text-red-800 transition duration-300 bg-red-100 rounded-md hover:bg-red-200"
             >
-              <UserMinus className="h-5 w-5" />
+              <UserMinus className="w-5 h-5" />
               Darse de Baja
             </button>
           </div>

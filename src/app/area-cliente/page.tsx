@@ -10,8 +10,17 @@ export default function AreaCliente() {
   const [isLogin, setIsLogin] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8]">
-      <header className="fixed top-0 z-50 w-full py-4 bg-white shadow-md">
+    <div className="relative min-h-screen overflow-hidden bg-[#f0f4f8]">
+      {/* Background image with blur effect */}
+      <div
+        className="fixed inset-0 w-full h-full bg-center bg-no-repeat bg-cover opacity-75 filter blur-sm"
+        style={{
+          backgroundImage: "url(/images/areacliente.png)",
+        }}
+      ></div>
+      
+      {/* Fixed header */}
+      <header className="fixed top-0 z-50 w-full py-3 shadow-md bg-white/80 backdrop-blur-sm">
         <div className="container flex items-center justify-between px-4 mx-auto">
           <div className="flex justify-center flex-1">
             <Link href="/">
@@ -28,16 +37,10 @@ export default function AreaCliente() {
         </div>
       </header>
 
-      <div
-        className="fixed inset-0 w-full h-screen bg-center bg-no-repeat bg-cover opacity-75 filter blur-sm"
-        style={{
-          backgroundImage: "url(/images/areacliente.png)",
-        }}
-      ></div>
-
-      <div className="flex items-center justify-center pt-20">
-        <div className="w-full max-w-md p-8 rounded-lg shadow-xl bg-white/50 backdrop-blur-sm">
-          <h2 className="text-3xl font-bold mb-6 text-center text-[#2f4f27]">
+      {/* Content container */}
+      <main className="relative z-10 flex items-start justify-center min-h-screen pt-16 md:justify-end md:pr-72 lg:pr-72">
+        <div className="w-full max-w-md p-5 mx-4 rounded-lg shadow-xl bg-white/50 backdrop-blur-sm">
+          <h2 className="text-xl font-bold mb-3 text-center text-[#2f4f27]">
             {isLogin ? "Iniciar Sesión" : "Registrarse"}
           </h2>
 
@@ -47,7 +50,7 @@ export default function AreaCliente() {
             <RegisterFormDos onRegisterSuccess={() => setIsLogin(true)} />
           )}
 
-          <p className="mt-4 text-center text-gray-600">
+          <p className="mt-2 text-sm text-center text-gray-600">
             {isLogin ? "¿No tienes cuenta?" : "¿Ya tienes cuenta?"}{" "}
             <button
               onClick={() => setIsLogin(!isLogin)}
@@ -57,7 +60,7 @@ export default function AreaCliente() {
             </button>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

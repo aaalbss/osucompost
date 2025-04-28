@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="min-h-screen flex flex-col">
+      <body className="flex flex-col min-h-screen">
         {/* Header condicional */}
         <ClientHeader />
 

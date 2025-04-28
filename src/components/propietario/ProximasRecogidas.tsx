@@ -1,46 +1,265 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { ExtendedRecogida } from '@/types/extendedTypes';
-import { CalendarDays, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Clock, MapPin, AlertTriangle, ChevronDown, Check, Repeat, Home } from 'lucide-react';
 import './dashboard-styles.css';
+
+// Define tipo para el contenedor
+interface Contenedor {
+  id: number;
+  capacidad: number;
+  frecuencia: string;
+  tipoResiduo: {
+    id: number;
+    descripcion: string;
+  };
+  puntoRecogida: {
+    id: number;
+    localidad: string;
+    cp: number;
+    provincia: string;
+    direccion: string;
+    horario: string;
+    tipo: string;
+    propietario: {
+      dni: string;
+      nombre: string;
+      telefono: number;
+      email: string;
+    }
+  }
+}
+
+// Define tipo para punto de recogida
+interface PuntoRecogida {
+  id: number;
+  localidad: string;
+  cp: number;
+  provincia: string;
+  direccion: string;
+  horario: string;
+  tipo: string;
+  propietario: {
+    dni: string;
+    nombre: string;
+    telefono: number;
+    email: string;
+  }
+}
 
 // Define props interface
 interface ProximasRecogidasProps {
   recogidas: ExtendedRecogida[];
+  frecuenciaSeleccionada?: string | null; // La frecuencia seleccionada por el usuario desde el dropdown
+  contenedorUsuarioId?: number | string; // El ID del contenedor del usuario (puede venir como string o número)
 }
 
-const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({ recogidas }) => {
-  const [ahora, setAhora] = useState<Date>(new Date());
+const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({ 
+  recogidas, 
+  frecuenciaSeleccionada,
+  contenedorUsuarioId
+}) => {
+  const [ahora] = useState<Date>(new Date());
+  const [cargando, setCargando] = useState<boolean>(true);
+  const [contenedores, setContenedores] = useState<Contenedor[]>([]);
+  const [contenedoresPropietario, setContenedoresPropietario] = useState<Contenedor[]>([]);
+  const [puntosRecogida, setPuntosRecogida] = useState<PuntoRecogida[]>([]);
+  const [puntoSeleccionadoId, setPuntoSeleccionadoId] = useState<number | null>(null);
+  const [mostrarDropdown, setMostrarDropdown] = useState<boolean>(false);
+  const [recogidasPorContenedor, setRecogidasPorContenedor] = useState<{[key: number]: ExtendedRecogida[]}>({});
+  const [error, setError] = useState<string | null>(null);
+  const [dniPropietarioSesion, setDniPropietarioSesion] = useState<string | null>(null);
+  const [recogidasDB, setRecogidasDB] = useState<ExtendedRecogida[]>([]);
 
+  // Convertir el ID del contenedor a número para comparaciones
+  const contenedorIdNumerico = contenedorUsuarioId ? Number(contenedorUsuarioId) : undefined;
+
+  // Obtener el DNI del propietario con sesión iniciada
   useEffect(() => {
-    const intervalo = setInterval(() => {
-      setAhora(new Date());
-    }, 60000);
-    return () => clearInterval(intervalo);
+    try {
+      const userDni = localStorage.getItem('userDni');
+      console.log('DNI del propietario con sesión iniciada:', userDni);
+      
+      if (userDni) {
+        setDniPropietarioSesion(userDni);
+      } else {
+        console.warn('No se encontró DNI en la sesión');
+      }
+    } catch (error) {
+      console.error('Error al obtener DNI de la sesión:', error);
+    }
   }, []);
 
-  const proximasRecogidas = recogidas
-    .filter(recogida => 
-      // Incluir recogidas sin fecha de recogida real y futuras
-      !recogida.fechaRecogidaReal && 
-      new Date(recogida.fechaRecogidaEstimada) > ahora
-    )
-    .sort((a, b) => 
-      new Date(a.fechaRecogidaEstimada).getTime() - 
-      new Date(b.fechaRecogidaEstimada).getTime()
-    );
+  // Obtener las recogidas de la base de datos
+  useEffect(() => {
+    const obtenerRecogidas = async () => {
+      try {
+        setCargando(true);
+        console.log('Obteniendo recogidas de la base de datos...');
+        
+        const respuesta = await fetch('/api/recogidas');
+        if (respuesta.ok) {
+          const datos = await respuesta.json();
+          console.log('Recogidas obtenidas de la base de datos:', datos);
+          
+          // Filtrar recogidas futuras (que no han sido recogidas aún)
+          const recogidasFuturas = datos.filter((recogida: ExtendedRecogida) => 
+            !recogida.fechaRecogidaReal && 
+            new Date(recogida.fechaRecogidaEstimada) > ahora
+          );
+          
+          setRecogidasDB(recogidasFuturas);
+        } else {
+          console.error('Error al obtener recogidas. Status:', respuesta.status);
+          setError('Error al obtener las recogidas');
+        }
+      } catch (error) {
+        console.error('Error al obtener recogidas:', error);
+        setError('Error de conexión al obtener recogidas');
+      }
+    };
 
+    obtenerRecogidas();
+  }, [ahora]);
+
+  // Obtener los contenedores desde la API
+  useEffect(() => {
+    if (!dniPropietarioSesion && !contenedorIdNumerico) {
+      // Si no tenemos DNI ni contenedor, esperar a que se cargue el DNI
+      return;
+    }
+    
+    const obtenerContenedores = async () => {
+      try {
+        console.log('Obteniendo contenedores...');
+        
+        const respuesta = await fetch('/api/contenedores');
+        if (respuesta.ok) {
+          const datos = await respuesta.json();
+          console.log('Contenedores obtenidos:', datos);
+          setContenedores(datos);
+          
+          // Determinar el DNI a utilizar
+          const dniAUtilizar = dniPropietarioSesion || (() => {
+            // Si no tenemos DNI de sesión pero sí ID de contenedor, buscar el propietario
+            if (contenedorIdNumerico) {
+              const contenedorSeleccionado = datos.find(
+                (cont: Contenedor) => cont.id === contenedorIdNumerico
+              );
+              return contenedorSeleccionado?.puntoRecogida?.propietario?.dni || null;
+            }
+            return null;
+          })();
+          
+          console.log('DNI a utilizar para filtrar contenedores:', dniAUtilizar);
+          
+          // Filtrar los contenedores del propietario
+          if (dniAUtilizar) {
+            const contenedoresFiltrados = datos.filter(
+              (cont: Contenedor) => cont.puntoRecogida?.propietario?.dni === dniAUtilizar
+            );
+            console.log(`Contenedores del propietario ${dniAUtilizar}:`, contenedoresFiltrados);
+            setContenedoresPropietario(contenedoresFiltrados);
+            
+            // Extraer puntos de recogida únicos
+            const puntosUnicos: PuntoRecogida[] = [];
+            const puntosIds = new Set();
+            
+            contenedoresFiltrados.forEach((cont: Contenedor) => {
+              if (cont.puntoRecogida && cont.puntoRecogida.id && !puntosIds.has(cont.puntoRecogida.id)) {
+                puntosIds.add(cont.puntoRecogida.id);
+                puntosUnicos.push(cont.puntoRecogida);
+              }
+            });
+            
+            console.log('Puntos de recogida únicos del propietario:', puntosUnicos);
+            setPuntosRecogida(puntosUnicos);
+            
+            // Si solo hay un punto de recogida, seleccionarlo automáticamente
+            if (puntosUnicos.length === 1) {
+              setPuntoSeleccionadoId(puntosUnicos[0].id);
+            }
+          } else {
+            console.warn('No se pudo determinar el DNI del propietario');
+            setError('No se pudo identificar al propietario');
+          }
+        } else {
+          console.error('Error al obtener contenedores. Status:', respuesta.status);
+          setError('Error al obtener los contenedores');
+        }
+      } catch (error) {
+        console.error('Error al obtener contenedores:', error);
+        setError('Error de conexión');
+      } finally {
+        setCargando(false);
+      }
+    };
+
+    obtenerContenedores();
+  }, [contenedorIdNumerico, dniPropietarioSesion, ahora]);
+
+  // Procesar las recogidas y agruparlas por contenedor
+  useEffect(() => {
+    if (cargando || contenedoresPropietario.length === 0 || recogidasDB.length === 0) {
+      if (!cargando && contenedoresPropietario.length > 0 && recogidasDB.length === 0) {
+        console.log('No hay recogidas en la base de datos para los contenedores del propietario');
+      }
+      
+      if (!cargando) {
+        setCargando(false);
+      }
+      return;
+    }
+    
+    // Filtrar contenedores por punto de recogida si hay uno seleccionado
+    let contenedoresAMostrar = contenedoresPropietario;
+    if (puntoSeleccionadoId) {
+      contenedoresAMostrar = contenedoresPropietario.filter(
+        cont => cont.puntoRecogida && cont.puntoRecogida.id === puntoSeleccionadoId
+      );
+      console.log(`Contenedores filtrados para punto de recogida ${puntoSeleccionadoId}:`, contenedoresAMostrar);
+    }
+    
+    // Objeto para almacenar recogidas por cada contenedor
+    const recogidasPorCont: {[key: number]: ExtendedRecogida[]} = {};
+    
+    // Procesar cada contenedor
+    contenedoresAMostrar.forEach(contenedor => {
+      // Filtrar recogidas para este contenedor
+      const recogidasContenedor = recogidasDB.filter(recogida => 
+        recogida.contenedor && recogida.contenedor.id === contenedor.id
+      );
+      
+      if (recogidasContenedor.length > 0) {
+        // Ordenar por fecha estimada
+        const recogidasOrdenadas = recogidasContenedor.sort(
+          (a, b) => new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
+        );
+        
+        // Limitar a 5 recogidas
+        recogidasPorCont[contenedor.id] = recogidasOrdenadas.slice(0, 5);
+        console.log(`Recogidas para contenedor ${contenedor.id}:`, recogidasPorCont[contenedor.id].length);
+      } else {
+        console.log(`No hay recogidas para el contenedor ${contenedor.id}`);
+      }
+    });
+    
+    console.log('Recogidas por contenedor (desde la BD):', recogidasPorCont);
+    setRecogidasPorContenedor(recogidasPorCont);
+    setCargando(false);
+  }, [recogidasDB, contenedoresPropietario, puntoSeleccionadoId, cargando]);
+
+  // Formatear información de fecha
   const obtenerInfoFecha = (fechaString: string) => {
     const fecha = new Date(fechaString);
     const dia = fecha.getDate();
-    const mes = fecha.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-    const diaSemana = fecha.toLocaleString('es-ES', { weekday: 'short' }).replace('.', '');
+    const mes = fecha.toLocaleString('es-ES', { month: 'short' }).replace('.', '').toUpperCase();
+    const diaSemana = fecha.toLocaleString('es-ES', { weekday: 'short' }).replace('.', '').toUpperCase();
     return { dia, mes, diaSemana };
   };
 
-  // Nueva función para obtener hora basada en el horario
+  // Obtener texto para el horario
   const obtenerHora = (recogida: ExtendedRecogida) => {
-    // Verificar si existe horario en puntoRecogida
     const horario = recogida.horarioSeleccionado || recogida.contenedor?.puntoRecogida?.horario;
     
     if (horario === 'M') {
@@ -56,86 +275,231 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({ recogidas }) => {
     }
   };
 
+  // Obtener texto para el horario en formato legible
+  const obtenerTextoHorario = (horario: string | undefined) => {
+    if (horario === 'M') return 'Mañana';
+    if (horario === 'T') return 'Tarde';
+    if (horario === 'N') return 'Noche';
+    return 'No definido';
+  };
+
+  // Manejar la selección de un punto de recogida
+  const seleccionarPunto = (id: number) => {
+    setPuntoSeleccionadoId(id);
+    setMostrarDropdown(false);
+  };
+
+  // Obtener el nombre del punto seleccionado
+  const obtenerNombrePuntoSeleccionado = () => {
+    if (!puntoSeleccionadoId) return "Todos los puntos";
+    
+    const puntoSeleccionado = puntosRecogida.find(p => p.id === puntoSeleccionadoId);
+    if (!puntoSeleccionado) return "Punto no encontrado";
+    
+    return `${puntoSeleccionado.direccion}, ${puntoSeleccionado.localidad}`;
+  };
+  
+  // Obtener color para frecuencia
+  const obtenerColorFrecuencia = (frecuencia: string) => {
+    switch (frecuencia) {
+      case 'Diaria': return '#10b981'; // verde
+      case '3 por semana': return '#0ea5e9'; // azul claro
+      case '1 por semana': return '#6366f1'; // azul índigo
+      case 'Quincenal': return '#8b5cf6'; // morado
+      case 'Ocasional': return '#ec4899'; // rosa
+      default: return '#64748b'; // gris oscuro
+    }
+  };
+
+  // Verificar si hay algún contenedor con recogidas
+  const hayRecogidas = Object.keys(recogidasPorContenedor).length > 0;
+  
+  // Contar los puntos de recogida únicos
+  const numerosPuntosRecogida = puntosRecogida.length;
+
   return (
-    <div className="dashboard-card card-green animate-fadeIn" style={{ animationDelay: '0.5s' }}>
-      <div className="card-header">
-        <h2 className="card-title">
-          <CalendarDays size={24} />
-          Próximas Recogidas
-        </h2>
+    <div className="overflow-hidden bg-white rounded-md shadow-sm dashboard-card animate-fadeIn" style={{ animationDelay: '0.5s' }}>
+      <div className="flex items-center justify-between p-4 bg-green-50">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={24} className="text-green-600" />
+          <h2 className="text-xl font-medium text-green-800">Próximas Recogidas</h2>
+          {!cargando && (
+            <div className="flex items-center gap-2 ml-2">
+              <span className="px-2 py-1 text-sm text-green-800 bg-green-100 rounded-full">
+                {numerosPuntosRecogida} punto{numerosPuntosRecogida !== 1 ? 's' : ''} de recogida
+              </span>
+              <span className="px-2 py-1 text-sm text-green-800 bg-green-100 rounded-full">
+                {contenedoresPropietario.length} contenedor{contenedoresPropietario.length !== 1 ? 'es' : ''}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        {/* Selector de punto de recogida (solo si hay más de uno) */}
+        {puntosRecogida.length > 1 && (
+          <div className="relative">
+            <button 
+              onClick={() => setMostrarDropdown(!mostrarDropdown)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-green-700 bg-white border border-green-200 rounded-md shadow-sm hover:bg-green-50"
+            >
+              <Home size={16} />
+              <span className="max-w-[150px] truncate">{obtenerNombrePuntoSeleccionado()}</span>
+              <ChevronDown size={16} />
+            </button>
+            
+            {mostrarDropdown && (
+              <div className="absolute right-0 z-10 mt-1 overflow-hidden bg-white rounded-md shadow-lg w-60">
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setPuntoSeleccionadoId(null);
+                      setMostrarDropdown(false);
+                    }}
+                    className="flex items-center justify-between w-full px-4 py-2 text-sm text-left hover:bg-green-50"
+                  >
+                    <span>Todos los puntos</span>
+                    {puntoSeleccionadoId === null && <Check size={16} className="text-green-600" />}
+                  </button>
+                  
+                  {puntosRecogida.map(punto => (
+                    <button
+                      key={punto.id}
+                      onClick={() => seleccionarPunto(punto.id)}
+                      className="flex items-center justify-between w-full px-4 py-2 text-sm text-left hover:bg-green-50"
+                    >
+                      <span className="truncate">
+                        {punto.direccion}, {punto.localidad}
+                      </span>
+                      {puntoSeleccionadoId === punto.id && <Check size={16} className="text-green-600" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
-      <div className="card-body">
-        {proximasRecogidas.length === 0 ? (
-          <div className="empty-state">
-            <Clock size={48} className="text-green-300 mb-4" />
+      <div className="px-4 py-3">
+        {cargando ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 mr-3 border-t-2 border-b-2 border-green-500 rounded-full animate-spin"></div>
+            <p className="text-green-600">Cargando recogidas...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <AlertTriangle size={48} className="mb-4 text-amber-500" />
+            <p className="text-amber-700">{error}</p>
+          </div>
+        ) : !hayRecogidas ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Clock size={48} className="mb-4 text-green-300" />
             <p className="text-green-600">No hay recogidas programadas próximamente.</p>
+            {contenedoresPropietario.length === 0 && dniPropietarioSesion && (
+              <p className="mt-2 text-sm text-gray-500">No se encontraron contenedores asociados a su cuenta.</p>
+            )}
+            {contenedoresPropietario.length > 0 && (
+              <p className="mt-2 text-sm text-gray-500">No se encontraron recogidas programadas en la base de datos.</p>
+            )}
           </div>
         ) : (
-          <div className="recogidas-grid ">
-            {proximasRecogidas.map((recogida, index) => {
-              const { dia, mes, diaSemana } = obtenerInfoFecha(recogida.fechaRecogidaEstimada);
-              const hora = obtenerHora(recogida);
-              const tipoResiduo = recogida.contenedor?.tipoResiduo?.descripcion || 'No especificado';
-              const esOrganico = tipoResiduo.toLowerCase().includes('organico');
+          <div>
+            {Object.entries(recogidasPorContenedor).map(([contenedorId, recogidasDeContenedor]) => {
+              const contenedor = contenedoresPropietario.find(c => c.id === Number(contenedorId));
+              if (!contenedor) return null;
               
-              // Obtener texto para el horario
-              const textoHorario = (recogida.horarioSeleccionado || recogida.contenedor?.puntoRecogida?.horario) === 'M' 
-                ? 'Mañana' 
-                : (recogida.horarioSeleccionado || recogida.contenedor?.puntoRecogida?.horario) === 'T'
-                  ? 'Tarde'
-                  : (recogida.horarioSeleccionado || recogida.contenedor?.puntoRecogida?.horario) === 'N'
-                    ? 'Noche'
-                    : hora;
+              // Información del contenedor
+              const tipoResiduo = contenedor.tipoResiduo?.descripcion || 'No especificado';
+              const capacidad = contenedor.capacidad || 'N/A';
+              const frecuencia = contenedor.frecuencia || 'No especificada';
+              const colorFrecuencia = obtenerColorFrecuencia(frecuencia);
+              const esOrganico = tipoResiduo.toLowerCase().includes('organico');
+              const direccion = contenedor.puntoRecogida?.direccion || 'Dirección no disponible';
+              const localidad = contenedor.puntoRecogida?.localidad || 'Localidad no disponible';
               
               return (
-                <div 
-                  key={recogida.id} 
-                  className="next-pickup animate-fadeIn"
-                  style={{ animationDelay: `${0.5 + index * 0.1}s` }}
-                >
-                  <div 
-                    className="pickup-date" 
-                    style={{ 
-                      backgroundColor: esOrganico ? '#10b981' : '#3b82f6'
-                    }}
-                  >
-                    <span className="date-month">{mes}</span>
-                    <span className="date-day">{dia}</span>
-                    <span className="date-month">{diaSemana}</span>
-                    <div className="flex items-center gap-1 mt-1 bg-white bg-opacity-20 px-2 py-1 rounded text-xs">
-                      <Clock size={12} />
-                      {textoHorario}
+                <div key={`contenedor-${contenedorId}`} className="mb-6 last:mb-0">
+                  {/* Barra superior del contenedor con información clave */}
+                  <div className="flex items-center justify-between px-4 py-3 mb-4 rounded-md shadow-sm bg-gray-50">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 mr-2 rounded-full" style={{backgroundColor: esOrganico ? '#10b981' : '#3b82f6'}}></div>
+                      <span className="mr-2 font-medium">{tipoResiduo}</span>
+                      <span className="text-sm text-gray-600">{capacidad} litros</span>
+                    </div>
+                    
+                    <div className="text-xs text-gray-500">
+                      ID: {contenedorId}
                     </div>
                   </div>
                   
-                  <div className="pickup-details">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className={`badge ${esOrganico ? 'badge-green' : 'badge-blue'} pickup-type`}>
-                        {tipoResiduo}
-                      </span>
-                      <span className="badge badge-purple">
-                        {recogida.contenedor?.capacidad || 'N/A'} litros
-                      </span>
+                  {/* Destacar frecuencia y ubicación */}
+                  <div className="flex flex-col items-start justify-between gap-2 px-2 mb-4 md:flex-row md:items-center">
+                    {/* Frecuencia destacada */}
+                    <div 
+                      className="flex items-center px-3 py-2 text-white rounded-md" 
+                      style={{backgroundColor: colorFrecuencia}}
+                    >
+                      <Repeat size={16} className="mr-2" />
+                      <span className="font-medium">{frecuencia}</span>
                     </div>
                     
-                    <div className="flex items-start gap-2 bg-gray-50 p-2 rounded">
-                      <MapPin size={16} className={esOrganico ? 'text-green-500' : 'text-blue-500'} />
-                      <div className="text-sm text-gray-700">
-                        {recogida.contenedor?.puntoRecogida?.direccion}, 
-                        <span className="font-medium ml-1">{recogida.contenedor?.puntoRecogida?.localidad}</span>
-                      </div>
+                    {/* Ubicación destacada */}
+                    <div className="flex items-center">
+                      <MapPin size={16} className="mr-2 text-gray-700" />
+                      <span className="font-medium">{direccion}, {localidad}</span>
                     </div>
-                    
-                    {recogida.incidencias && (
-                      <div className="flex items-start gap-2 mt-2 bg-amber-50 p-2 rounded border-l-2 border-amber-400">
-                        <AlertTriangle size={16} className="text-amber-500" />
-                        <div className="text-sm text-amber-800">
-                          {recogida.incidencias}
-                        </div>
-                      </div>
-                    )}
                   </div>
+                  
+                  {/* Listado de recogidas para este contenedor */}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+                    {recogidasDeContenedor.map((recogida, index) => {
+                      const { dia, mes, diaSemana } = obtenerInfoFecha(recogida.fechaRecogidaEstimada);
+                      const textoHorario = obtenerTextoHorario(recogida.horarioSeleccionado || recogida.contenedor?.puntoRecogida?.horario);
+                      
+                      return (
+                        <div 
+                          key={`recogida-${recogida.id}-${index}`} 
+                          className="overflow-hidden bg-white border rounded-md shadow-sm animate-fadeIn"
+                          style={{ animationDelay: `${0.5 + index * 0.1}s` }}
+                        >
+                          {/* Cabecera con fecha */}
+                          <div 
+                            className="p-3 text-center text-white" 
+                            style={{ backgroundColor: colorFrecuencia }}
+                          >
+                            <div className="text-xs font-medium">{mes}</div>
+                            <div className="text-2xl font-bold leading-none">{dia}</div>
+                            <div className="text-xs">{diaSemana}</div>
+                          </div>
+                          
+                          {/* Horario */}
+                          <div className="p-2 text-sm text-center bg-gray-50">
+                            <div className="flex items-center justify-center">
+                              <Clock size={14} className="mr-1" />
+                              <span>{textoHorario}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Contenido si hay incidencias */}
+                          {recogida.incidencias && (
+                            <div className="p-2 border-t">
+                              <div className="flex items-start gap-2 p-1.5 rounded bg-amber-50 text-xs">
+                                <AlertTriangle size={12} className="text-amber-500 mt-0.5" />
+                                <span className="text-amber-800">
+                                  {recogida.incidencias}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Línea separadora entre contenedores */}
+                  {Object.keys(recogidasPorContenedor).length > 1 && (
+                    <div className="my-6 border-b"></div>
+                  )}
                 </div>
               );
             })}

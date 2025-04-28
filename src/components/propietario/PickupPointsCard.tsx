@@ -1,6 +1,6 @@
 'use client';
 import { PuntoRecogida } from '@/types/types';
-import { MapPin, Clock, Building, Bookmark, Maximize } from 'lucide-react';
+import { MapPin, Clock, Building, Bookmark, Maximize, Calendar } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import './dashboard-styles.css';
@@ -10,6 +10,7 @@ interface PickupPointsCardProps {
   contenedores?: {
     id: number;
     capacidad: number;
+    frecuencia?: string;
     tipoResiduo: {
       id: number;
       descripcion: string;
@@ -253,10 +254,16 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <p className="font-medium text-purple-700">ID: {contenedor.id}</p>
-                                <p className="text-purple-600">
+                                <div className="flex flex-wrap gap-2 mt-1">
                                   <span className="badge badge-purple">{contenedor.tipoResiduo.descripcion}</span>
-                                  <span className="ml-2">{contenedor.capacidad} L</span>
-                                </p>
+                                  <span className="badge badge-outline-purple">{contenedor.capacidad} L</span>
+                                  {contenedor.frecuencia && (
+                                    <span className="flex items-center gap-1 badge badge-outline-purple">
+                                      <Calendar size={14} />
+                                      Recogida: {contenedor.frecuencia}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <button 
                                 onClick={() => handlePrintBarcode(contenedor.id)}

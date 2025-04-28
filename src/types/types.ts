@@ -37,6 +37,7 @@ export interface Contenedor {
     id: number;
     propietario?: Propietario;
   };
+  frecuencia: string; // Añadido campo frecuencia ('Diaria', '3 por semana', etc.)
 }
 
 export interface Recogida {

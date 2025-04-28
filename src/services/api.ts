@@ -8,6 +8,7 @@ interface Contenedor {
   capacidad: number;
   tipoResiduo: TipoResiduo;
   puntoRecogida: PuntoRecogida;
+  frecuencia: string; // Añadido para asegurar que frecuencia es parte del modelo
 }
 
 interface Precio {
@@ -391,6 +392,14 @@ export const registroAPI = {
       console.log('Iniciando registro de propietario');
       const dniNormalizado = formData.dni.trim().toUpperCase();
       
+      // Verificar que la frecuencia esté presente
+      if (!formData.frecuencia) {
+        console.warn('Campo frecuencia vacío, usando valor por defecto');
+        formData.frecuencia = 'Diaria';
+      }
+      
+      console.log('Frecuencia seleccionada:', formData.frecuencia);
+      
       // 1. Verificar si ya existe una fecha de alta inmutable
       const fechaAltaExistente = localStorage.getItem(`fechaAlta_${dniNormalizado}`);
       let fechaAlta: string;
@@ -476,9 +485,9 @@ export const registroAPI = {
         provincia: formData.provincia.trim(),
         direccion: formData.domicilio.trim(),
         dni: dniNormalizado,
-        horario: formData.horario.includes('Mañana') || formData.horario.includes('Manana') ? 'M' : 
-        formData.horario.includes('Tarde') ? 'T' : 
-        formData.horario.includes('Noche') ? 'N' : 'M', 
+        horario: formData.horario.includes('Mañana') || formData.horario.includes('manana') ? 'M' : 
+                formData.horario.includes('Tarde') || formData.horario.includes('tarde') ? 'T' : 
+                formData.horario.includes('Noche') || formData.horario.includes('noche') ? 'N' : 'M', 
         tipo: formData.fuente,
         propietario: propietarioData
       };
@@ -504,6 +513,7 @@ export const registroAPI = {
         case 'Contenedor 1200 L': capacidad = 1200; break;
       }
       
+      // AQUÍ ESTÁ EL CAMBIO PRINCIPAL - Asegurar que el campo frecuencia se envía correctamente
       const contenedorData = {
         id_punto_recogida: puntoRecogidaRegistrado.id,
         capacidad: capacidad,
@@ -512,10 +522,12 @@ export const registroAPI = {
         puntoRecogida: {
           ...puntoRecogidaRegistrado,
           propietario: propietarioData
-        }
+        },
+        // Añadir el campo frecuencia como propiedad de primer nivel
+        frecuencia: formData.frecuencia
       };
       
-      console.log('Registrando contenedor:', contenedorData);
+      console.log('Registrando contenedor con frecuencia:', contenedorData);
       await fetchWithTimeout(`${API_BASE_URL}/contenedores`, {
         method: 'POST',
         headers: {

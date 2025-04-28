@@ -10,7 +10,7 @@ export default function AreaCliente() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8]">
-      <header className="bg-white shadow-md py-4 fixed top-0 w-full z-50">
+      <header className="fixed top-0 z-50 w-full py-4 bg-white shadow-md">
         <div className="text-center">
           <Link href="/">
             <Title text="OSUCOMPOST" />
@@ -19,14 +19,14 @@ export default function AreaCliente() {
       </header>
 
       <div
-        className="fixed inset-0 w-full h-screen bg-cover bg-center bg-no-repeat filter blur-sm opacity-75"
+        className="fixed inset-0 w-full h-screen bg-center bg-no-repeat bg-cover opacity-75 filter blur-sm"
         style={{
           backgroundImage: "url(/images/userZone.jpg)",
         }}
       ></div>
 
-      <div className="pt-20 flex justify-center items-center">
-        <div className="bg-white/50 backdrop-blur-sm p-8 rounded-lg shadow-xl w-full max-w-md">
+      <div className="flex items-center justify-center pt-20">
+        <div className="w-full max-w-md p-8 rounded-lg shadow-xl bg-white/50 backdrop-blur-sm">
           <h2 className="text-3xl font-bold mb-6 text-center text-[#2f4f27]">
             {isLogin ? "Iniciar Sesión" : "Registrarse"}
           </h2>
