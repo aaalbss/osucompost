@@ -390,15 +390,34 @@ export const registroAPI = {
   submitFormData: async (formData: FormData): Promise<boolean> => {
     try {
       console.log('Iniciando registro de propietario');
-      const dniNormalizado = formData.dni.trim().toUpperCase();
+      
+      // Normalizar y limpiar todos los campos para evitar errores JSON
+      const datosNormalizados = {
+        ...formData,
+        dni: formData.dni.trim().toUpperCase(),
+        nombre: formData.nombre.trim(),
+        telefono: formData.telefono.replace(/\D/g, ''), // Eliminar caracteres no numéricos
+        email: formData.email.trim().toLowerCase(),
+        domicilio: formData.domicilio.trim(),
+        localidad: formData.localidad.trim(),
+        cp: formData.cp.trim(),
+        provincia: formData.provincia.trim(),
+        tipoResiduo: formData.tipoResiduo,
+        fuente: formData.fuente,
+        cantidad: formData.cantidad,
+        frecuencia: formData.frecuencia || 'Diaria', // Valor por defecto
+        horario: formData.horario
+      };
+      
+      const dniNormalizado = datosNormalizados.dni;
       
       // Verificar que la frecuencia esté presente
-      if (!formData.frecuencia) {
+      if (!datosNormalizados.frecuencia) {
         console.warn('Campo frecuencia vacío, usando valor por defecto');
-        formData.frecuencia = 'Diaria';
+        datosNormalizados.frecuencia = 'Diaria';
       }
       
-      console.log('Frecuencia seleccionada:', formData.frecuencia);
+      console.log('Frecuencia seleccionada:', datosNormalizados.frecuencia);
       
       // 1. Verificar si ya existe una fecha de alta inmutable
       const fechaAltaExistente = localStorage.getItem(`fechaAlta_${dniNormalizado}`);
@@ -406,15 +425,21 @@ export const registroAPI = {
 
       // 2. Determinar la fecha de alta
       if (fechaAltaExistente) {
-        const fechaAltaObj = JSON.parse(fechaAltaExistente);
-        
-        // Si ya existe una fecha inmutable, usarla
-        if (fechaAltaObj.inmutable) {
-          fechaAlta = fechaAltaObj.fecha;
-          console.log('Fecha de alta ya establecida y bloqueada:', fechaAlta);
-        } else {
-          // Si no es inmutable, usar la fecha existente o la actual
-          fechaAlta = fechaAltaObj.fecha || new Date().toISOString();
+        try {
+          const fechaAltaObj = JSON.parse(fechaAltaExistente);
+          
+          // Si ya existe una fecha inmutable, usarla
+          if (fechaAltaObj.inmutable) {
+            fechaAlta = fechaAltaObj.fecha;
+            console.log('Fecha de alta ya establecida y bloqueada:', fechaAlta);
+          } else {
+            // Si no es inmutable, usar la fecha existente o la actual
+            fechaAlta = fechaAltaObj.fecha || new Date().toISOString();
+          }
+        } catch (e) {
+          // Si hay error al parsear JSON, usar la fecha actual
+          console.error('Error al parsear fecha de alta:', e);
+          fechaAlta = new Date().toISOString();
         }
       } else {
         // Si no existe, usar la fecha actual
@@ -441,32 +466,42 @@ export const registroAPI = {
         // Solo crear el propietario si no existe
         propietarioData = {
           dni: dniNormalizado,
-          nombre: formData.nombre.trim(),
-          telefono: parseInt(formData.telefono.replace(/\D/g, '')) || 0,
-          email: formData.email.trim().toLowerCase(),
+          nombre: datosNormalizados.nombre,
+          telefono: parseInt(datosNormalizados.telefono) || 0,
+          email: datosNormalizados.email,
         };
         
         console.log('Registrando nuevo propietario:', propietarioData);
-        await fetchWithTimeout(`${API_BASE_URL}/propietarios`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(propietarioData),
-        });
-        console.log('Propietario registrado correctamente');
+        
+        try {
+          // Convertir explícitamente a JSON para evitar problemas con caracteres especiales
+          const jsonPropietario = JSON.stringify(propietarioData);
+          console.log('JSON a enviar (propietario):', jsonPropietario);
+          
+          await fetchWithTimeout(`${API_BASE_URL}/propietarios`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonPropietario,
+          });
+          console.log('Propietario registrado correctamente');
+        } catch (error) {
+          console.error('Error al registrar propietario:', error);
+          throw new Error(`Error al registrar propietario: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        }
       } else {
         console.log('Propietario ya existe, usando datos existentes:', propietarioExistente);
         propietarioData = propietarioExistente;
       }
       
-      // El resto del código permanece prácticamente igual...
+      // Verificar si ya existe un punto de recogida con la misma dirección
       const puntosExistentes = await puntosRecogidaAPI.obtenerPorPropietario(dniNormalizado);
       
-      const direccionNormalizada = formData.domicilio.trim().toLowerCase();
+      const direccionNormalizada = datosNormalizados.domicilio.toLowerCase();
       const puntoExistente = puntosExistentes.find(punto => 
         punto.direccion.toLowerCase() === direccionNormalizada && 
-        punto.localidad.toLowerCase() === formData.localidad.trim().toLowerCase()
+        punto.localidad.toLowerCase() === datosNormalizados.localidad.toLowerCase()
       );
       
       if (puntoExistente) {
@@ -475,126 +510,150 @@ export const registroAPI = {
       }
       
       const tipoResiduoData: TipoResiduo = {
-        id: formData.tipoResiduo === 'Organico' ? 1 : 2,
-        descripcion: formData.tipoResiduo
+        id: datosNormalizados.tipoResiduo === 'Organico' ? 1 : 2,
+        descripcion: datosNormalizados.tipoResiduo
       };
       
       const puntoRecogidaData = {
-        localidad: formData.localidad.trim(),
-        cp: parseInt(formData.cp) || 0,
-        provincia: formData.provincia.trim(),
-        direccion: formData.domicilio.trim(),
+        localidad: datosNormalizados.localidad,
+        cp: parseInt(datosNormalizados.cp) || 0,
+        provincia: datosNormalizados.provincia,
+        direccion: datosNormalizados.domicilio,
         dni: dniNormalizado,
-        horario: formData.horario.includes('Mañana') || formData.horario.includes('manana') ? 'M' : 
-                formData.horario.includes('Tarde') || formData.horario.includes('tarde') ? 'T' : 
-                formData.horario.includes('Noche') || formData.horario.includes('noche') ? 'N' : 'M', 
-        tipo: formData.fuente,
+        horario: datosNormalizados.horario.includes('Mañana') || datosNormalizados.horario.includes('manana') ? 'M' : 
+                datosNormalizados.horario.includes('Tarde') || datosNormalizados.horario.includes('tarde') ? 'T' : 
+                datosNormalizados.horario.includes('Noche') || datosNormalizados.horario.includes('noche') ? 'N' : 'M', 
+        tipo: datosNormalizados.fuente,
         propietario: propietarioData
       };
       
       console.log('Registrando punto de recogida:', puntoRecogidaData);
-      const puntoRecogidaResponse = await fetchWithTimeout(`${API_BASE_URL}/puntos-recogida`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(puntoRecogidaData),
-      });
       
-      console.log('Punto de recogida registrado correctamente');
-      
-      const puntoRecogidaRegistrado = puntoRecogidaResponse;
-      
-      let capacidad = 16;
-      switch(formData.cantidad) {
-        case 'Cubo 16 L': capacidad = 16; break;
-        case 'Cubo 160 L': capacidad = 160; break;
-        case 'Contenedor 800 L': capacidad = 800; break;
-        case 'Contenedor 1200 L': capacidad = 1200; break;
-      }
-      
-      // AQUÍ ESTÁ EL CAMBIO PRINCIPAL - Asegurar que el campo frecuencia se envía correctamente
-      const contenedorData = {
-        id_punto_recogida: puntoRecogidaRegistrado.id,
-        capacidad: capacidad,
-        id_tipo_residuo: tipoResiduoData.id,
-        tipoResiduo: tipoResiduoData,
-        puntoRecogida: {
-          ...puntoRecogidaRegistrado,
-          propietario: propietarioData
-        },
-        // Añadir el campo frecuencia como propiedad de primer nivel
-        frecuencia: formData.frecuencia
-      };
-      
-      console.log('Registrando contenedor con frecuencia:', contenedorData);
-      await fetchWithTimeout(`${API_BASE_URL}/contenedores`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(contenedorData),
-      });
-      
-      console.log('Contenedor registrado correctamente');
-      
-      // Verificar si ya existe una facturación para este propietario y tipo de residuo
-      const facturacionesExistentes = await facturacionAPI.obtenerPorPropietario(dniNormalizado);
-      const facturacionExistente = facturacionesExistentes.find(facturacion => 
-        facturacion.idTipoResiduo === tipoResiduoData.id
-      );
-      
-      if (!facturacionExistente) {
-        const facturacionData = {
-          dni: dniNormalizado,
-          propietario: propietarioData,
-          id_tipo_residuo: tipoResiduoData.id,
-          tipoResiduo: tipoResiduoData,
-          total: 0
-        };
+      try {
+        // Convertir explícitamente a JSON para evitar problemas con caracteres especiales
+        const jsonPuntoRecogida = JSON.stringify(puntoRecogidaData);
+        console.log('JSON a enviar (punto recogida):', jsonPuntoRecogida);
         
-        console.log('Registrando facturación:', facturacionData);
-        await fetchWithTimeout(`${API_BASE_URL}/facturaciones`, {
+        const puntoRecogidaResponse = await fetchWithTimeout(`${API_BASE_URL}/puntos-recogida`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(facturacionData),
+          body: jsonPuntoRecogida,
         });
         
-        console.log('Facturación registrada correctamente');
-      } else {
-        console.log('Facturación ya existe, saltando creación:', facturacionExistente);
+        console.log('Punto de recogida registrado correctamente');
+        
+        const puntoRecogidaRegistrado = puntoRecogidaResponse;
+        
+        let capacidad = 16;
+        switch(datosNormalizados.cantidad) {
+          case 'Cubo 16 L': capacidad = 16; break;
+          case 'Cubo 160 L': capacidad = 160; break;
+          case 'Contenedor 800 L': capacidad = 800; break;
+          case 'Contenedor 1200 L': capacidad = 1200; break;
+        }
+        
+        // Asegurar que el campo frecuencia se envía correctamente
+        const contenedorData = {
+          id_punto_recogida: puntoRecogidaRegistrado.id,
+          capacidad: capacidad,
+          id_tipo_residuo: tipoResiduoData.id,
+          tipoResiduo: tipoResiduoData,
+          puntoRecogida: {
+            ...puntoRecogidaRegistrado,
+            propietario: propietarioData
+          },
+          frecuencia: datosNormalizados.frecuencia
+        };
+        
+        console.log('Registrando contenedor con frecuencia:', contenedorData);
+        
+        // Convertir explícitamente a JSON para evitar problemas con caracteres especiales
+        const jsonContenedor = JSON.stringify(contenedorData);
+        console.log('JSON a enviar (contenedor):', jsonContenedor);
+        
+        await fetchWithTimeout(`${API_BASE_URL}/contenedores`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: jsonContenedor,
+        });
+        
+        console.log('Contenedor registrado correctamente');
+        
+        // Verificar si ya existe una facturación para este propietario y tipo de residuo
+        const facturacionesExistentes = await facturacionAPI.obtenerPorPropietario(dniNormalizado);
+        const facturacionExistente = facturacionesExistentes.find(facturacion => 
+          facturacion.idTipoResiduo === tipoResiduoData.id
+        );
+        
+        if (!facturacionExistente) {
+          const facturacionData = {
+            dni: dniNormalizado,
+            propietario: propietarioData,
+            id_tipo_residuo: tipoResiduoData.id,
+            tipoResiduo: tipoResiduoData,
+            total: 0
+          };
+          
+          console.log('Registrando facturación:', facturacionData);
+          
+          // Convertir explícitamente a JSON
+          const jsonFacturacion = JSON.stringify(facturacionData);
+          console.log('JSON a enviar (facturación):', jsonFacturacion);
+          
+          await fetchWithTimeout(`${API_BASE_URL}/facturaciones`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonFacturacion,
+          });
+          
+          console.log('Facturación registrada correctamente');
+        } else {
+          console.log('Facturación ya existe, saltando creación:', facturacionExistente);
+        }
+        
+        // Obtener los precios existentes para este tipo de residuo
+        const preciosExistentes = await precioAPI.obtenerPorTipoResiduo(tipoResiduoData.id);
+
+        // Crear un nuevo precio con la fecha de alta
+        const precioData = {
+          tipoResiduo: tipoResiduoData,
+          fechaInicio: fechaAlta,
+          fechaFin: null,
+          // Mantener el mismo valor que el precio existente o usar 0.15 si no hay precios
+          valor: preciosExistentes.length > 0 ? preciosExistentes[0].valor : 0.15
+        };
+
+        console.log('Registrando precio con fecha de alta:', precioData);
+        
+        // Convertir explícitamente a JSON
+        const jsonPrecio = JSON.stringify(precioData);
+        console.log('JSON a enviar (precio):', jsonPrecio);
+        
+        await fetchWithTimeout(`${API_BASE_URL}/precios`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: jsonPrecio,
+        });
+
+        console.log('Precio con fecha de alta registrado correctamente');
+        
+        console.log('Registro completo exitoso');
+        
+        return true;
+      } catch (error) {
+        console.error('Error en el proceso de registro:', error);
+        throw new Error(`Error en el registro: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       }
-      
-      // Obtener los precios existentes para este tipo de residuo
-      const preciosExistentes = await precioAPI.obtenerPorTipoResiduo(tipoResiduoData.id);
-
-      // Crear un nuevo precio con la fecha de alta
-      const precioData = {
-        tipoResiduo: tipoResiduoData,
-        fechaInicio: fechaAlta,
-        fechaFin: null,
-        // Mantener el mismo valor que el precio existente o usar 0.15 si no hay precios
-        valor: preciosExistentes.length > 0 ? preciosExistentes[0].valor : 0.15
-      };
-
-      console.log('Registrando precio con fecha de alta:', precioData);
-      await fetchWithTimeout(`${API_BASE_URL}/precios`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(precioData),
-      });
-
-      console.log('Precio con fecha de alta registrado correctamente');
-      
-      console.log('Registro completo exitoso');
-      
-      return true;
     } catch (error) {
-      console.error('Error al enviar el formulario:', error);
+      console.error('Error global al enviar el formulario:', error);
       throw new Error(`Error en el registro: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   }

@@ -20,7 +20,7 @@ export default function LoginFormDos() {
     setIsLoading(true);
 
     try {
-      if (username === 'OSUCOMPOST' && password === '@OsuComp0st!2025') {
+      if (username === 'OSUCOMPOST' && password === 'Challenge2025') {
         localStorage.setItem('userUsername', username);
         localStorage.setItem('cookiesModalShown', 'true');
         window.location.href = '/operarios';

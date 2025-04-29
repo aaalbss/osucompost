@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Title from "@/components/Title";
 import Link from "next/link";
-import RegisterFormDos from "@/components/RegisterForm/RegisterFormDos"; 
+import Image from "next/image";
+import RegisterFormDos from "@/components/RegisterForm/RegisterFormDos";
 import LoginForm from "@/components/login/LoginForm";
 import { Home } from "lucide-react";
 
@@ -11,16 +12,8 @@ export default function AreaCliente() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f0f4f8]">
-      {/* Background image with blur effect */}
-      <div
-        className="fixed inset-0 w-full h-full bg-center bg-no-repeat bg-cover opacity-75 filter blur-sm"
-        style={{
-          backgroundImage: "url(/images/areacliente.png)",
-        }}
-      ></div>
-      
       {/* Fixed header */}
-      <header className="fixed top-0 z-50 w-full py-3 shadow-md bg-white/80 backdrop-blur-sm">
+      <header className="fixed top-0 z-50 w-full py-3 bg-white shadow-md backdrop-blur-sm">
         <div className="container flex items-center justify-between px-4 mx-auto">
           <div className="flex justify-center flex-1">
             <Link href="/">
@@ -37,6 +30,18 @@ export default function AreaCliente() {
         </div>
       </header>
 
+      {/* Background image with blur effect - positioned below header */}
+      <div className="fixed top-[56px] inset-x-0 bottom-0 w-full opacity-75 filter blur-sm">
+        <Image
+          src="/images/areacliente.png"
+          alt="Background"
+          fill
+          style={{ objectFit: 'cover', objectPosition: 'center top' }}
+          priority
+          quality={85}
+        />
+      </div>
+      
       {/* Content container */}
       <main className="relative z-10 flex items-start justify-center min-h-screen pt-16 md:justify-end md:pr-72 lg:pr-72">
         <div className="w-full max-w-md p-5 mx-4 rounded-lg shadow-xl bg-white/50 backdrop-blur-sm">

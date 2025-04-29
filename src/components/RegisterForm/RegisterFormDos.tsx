@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import StepIndicator from "./StepIndicator";
 import FormStep1 from "./FormStep1";
@@ -138,7 +138,8 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
   const [isProprietarioRegistered, setIsProprietarioRegistered] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [recogidas, setRecogidas] = useState<Recogida[]>([]);
-
+  const formRef = useRef<HTMLFormElement>(null);
+  
   const [formData, setFormData] = useState<FormData>({
     nombre: "",
     dni: "",
@@ -196,10 +197,24 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
         if (!formData.dni.trim()) {
           newErrors.dni = "El DNI/CIF es obligatorio";
           isValid = false;
+        } else {
+          // Validación del formato de DNI español: 8 dígitos seguidos de 1 letra mayúscula
+          const dniRegex = /^[0-9]{8}[A-Z]$/;
+          if (!dniRegex.test(formData.dni)) {
+            newErrors.dni = "El DNI debe tener 8 dígitos seguidos de una letra mayúscula";
+            isValid = false;
+          }
         }
         if (!formData.telefono.trim()) {
           newErrors.telefono = "El teléfono es obligatorio";
           isValid = false;
+        } else {
+          // Validación del formato de teléfono español: 9 dígitos numéricos
+          const telefonoRegex = /^[0-9]{9}$/;
+          if (!telefonoRegex.test(formData.telefono)) {
+            newErrors.telefono = "El teléfono debe tener exactamente 9 dígitos numéricos";
+            isValid = false;
+          }
         }
         if (!formData.email.trim()) {
           newErrors.email = "El correo electrónico es obligatorio";
@@ -220,6 +235,13 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
         if (!formData.cp.trim()) {
           newErrors.cp = "El código postal es obligatorio";
           isValid = false;
+        } else {
+          // Validación del formato de código postal español: 5 dígitos numéricos
+          const cpRegex = /^[0-9]{5}$/;
+          if (!cpRegex.test(formData.cp)) {
+            newErrors.cp = "El código postal debe tener exactamente 5 dígitos numéricos";
+            isValid = false;
+          }
         }
         if (!formData.provincia.trim()) {
           newErrors.provincia = "La provincia es obligatoria";
@@ -246,30 +268,11 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
     return true;
   }, [validateStep]);
 
-  const nextStep = useCallback(async () => {
+  const nextStep = useCallback(() => {
     if (validateStep(currentStep)) {
-      if (currentStep === 2) {
-        try {
-          console.log("Intentando registrar propietario con datos:", formData);
-
-          const registroResponse = await registroAPI.submitFormData(formData);
-
-          if (!registroResponse) {
-            throw new Error("Error al registrar el propietario");
-          }
-
-          console.log("Propietario registrado correctamente");
-          setIsProprietarioRegistered(true);
-        } catch (error) {
-          console.error("Error al registrar propietario:", error);
-          alert(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-          return;
-        }
-      }
-
       setCurrentStep((prev) => Math.min(prev + 1, 3));
     }
-  }, [currentStep, formData, validateStep]);
+  }, [currentStep, validateStep]);
 
   const prevStep = useCallback(() => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
@@ -359,7 +362,8 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
     }
   }, [formData]);
 
-  const handleSubmit = useCallback(
+  // Separamos explícitamente la función de envío para usarla solo en el botón final
+  const submitForm = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
   
@@ -372,12 +376,27 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
       setIsSubmitting(true);
   
       try {
-        console.log("Enviando datos del formulario:", formData);
-        // Registramos al propietario y sus datos
-        const registroResponse = await registroAPI.submitFormData(formData);
+        // Preparar los datos normalizados para el registro
+        const datosNormalizados = {
+          ...formData,
+          dni: formData.dni.trim().toUpperCase(),
+          telefono: formData.telefono.trim(),
+          cp: formData.cp.trim(),
+          // Eliminar posibles caracteres especiales en campos críticos
+          nombre: formData.nombre.trim(),
+          email: formData.email.trim().toLowerCase(),
+          domicilio: formData.domicilio.trim(),
+          localidad: formData.localidad.trim(),
+          provincia: formData.provincia.trim()
+        };
+        
+        console.log("Enviando datos del formulario:", datosNormalizados);
+        
+        // Registramos al propietario y sus datos SOLO en este punto final
+        const registroResponse = await registroAPI.submitFormData(datosNormalizados);
         console.log("Respuesta del registro:", registroResponse);
         
-        const dniNormalizado = formData.dni.trim().toUpperCase();
+        const dniNormalizado = datosNormalizados.dni;
         
         try {
           // Obtener los puntos de recogida del propietario
@@ -526,6 +545,25 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
     }
   };
 
+  // Manejador del evento keydown para prevenir el envío del formulario con Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Si se presiona Enter en cualquier input excepto textarea, 
+    // pero no en un botón tipo 'submit'
+    if (e.key === 'Enter' && 
+        e.target instanceof HTMLElement && 
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLButtonElement && 
+          (e.target as HTMLButtonElement).type === 'submit')) {
+      
+      e.preventDefault(); // Prevenir el comportamiento predeterminado
+      
+      // Solo avanzamos al siguiente paso si no estamos en el último
+      if (currentStep < 3) {
+        nextStep();
+      }
+    }
+  };
+
   return (
     <>
       <div className="form-container-wrapper">
@@ -537,43 +575,43 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
 
           <StepIndicator currentStep={currentStep} totalSteps={3} />
 
-          <form onSubmit={handleSubmit} className="form-form" autoComplete="off">
-            <div className="step-content">
-              {currentStep === 1 && (
-                <FormStep1
-                  formData={formData}
-                  errors={errors}
-                  handleChange={handleChange}
-                />
-              )}
-              {currentStep === 2 && (
-                <FormStep2
-                  formData={formData}
-                  errors={errors}
-                  handleChange={handleChange}
-                />
-              )}
-              {currentStep === 3 && (
-                <FormStep3 
-                  formData={formData} 
-                  handleChange={handleChange} 
-                />
-              )}
-            </div>
+          {/* Utilizamos role="presentation" para evitar que el navegador trate esto como un form normal */}
+          {currentStep < 3 ? (
+            // Para pasos 1 y 2, no usamos un formulario real para evitar envíos accidentales
+            <div 
+              role="presentation"
+              className="form-form" 
+              onKeyDown={handleKeyDown}
+            >
+              <div className="step-content">
+                {currentStep === 1 && (
+                  <FormStep1
+                    formData={formData}
+                    errors={errors}
+                    handleChange={handleChange}
+                  />
+                )}
+                {currentStep === 2 && (
+                  <FormStep2
+                    formData={formData}
+                    errors={errors}
+                    handleChange={handleChange}
+                  />
+                )}
+              </div>
 
-            <div className="form-footer">
-              {currentStep > 1 && (
-                <button
-                  type="button"
-                  onClick={prevStep}
-                  className="form-button button-prev"
-                  disabled={isSubmitting}
-                >
-                  ← Anterior
-                </button>
-              )}
+              <div className="form-footer">
+                {currentStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="form-button button-prev"
+                    disabled={isSubmitting}
+                  >
+                    ← Anterior
+                  </button>
+                )}
 
-              {currentStep < 3 ? (
                 <button
                   type="button"
                   onClick={nextStep}
@@ -582,7 +620,34 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
                 >
                   Siguiente →
                 </button>
-              ) : (
+              </div>
+            </div>
+          ) : (
+            // Solo para el paso 3 usamos un formulario real
+            <form 
+              ref={formRef}
+              onSubmit={submitForm} 
+              className="form-form" 
+              autoComplete="off"
+              onKeyDown={handleKeyDown}
+            >
+              <div className="step-content">
+                <FormStep3 
+                  formData={formData} 
+                  handleChange={handleChange} 
+                />
+              </div>
+
+              <div className="form-footer">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="form-button button-prev"
+                  disabled={isSubmitting}
+                >
+                  ← Anterior
+                </button>
+
                 <button
                   type="submit"
                   className="ml-auto form-button button-submit"
@@ -592,9 +657,9 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
                     {isSubmitting ? "Procesando..." : "Completar Registro"}
                   </span>
                 </button>
-              )}
-            </div>
-          </form>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 

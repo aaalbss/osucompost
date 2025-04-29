@@ -10,6 +10,19 @@ interface FormStep3Props {
 }
 
 const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
+  // Función para manejar cambios evitando el envío accidental del formulario
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    e.preventDefault(); // Evita cualquier acción predeterminada
+    handleChange(e);
+  };
+
+  // Función para prevenir el envío del formulario al presionar Enter en los selectores
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevenir el envío del formulario al presionar Enter
+    }
+  };
+
   return (
     <div className="fade-in">
       <div className="form-grid">
@@ -17,7 +30,8 @@ const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
           <select
             name="tipoResiduo"
             value={formData.tipoResiduo}
-            onChange={handleChange}
+            onChange={handleSelectChange}
+            onKeyDown={handleKeyDown}
             className="form-select"
             tabIndex={0}
           >
@@ -30,7 +44,8 @@ const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
           <select
             name="fuente"
             value={formData.fuente}
-            onChange={handleChange}
+            onChange={handleSelectChange}
+            onKeyDown={handleKeyDown}
             className="form-select"
             tabIndex={0}
           >
@@ -49,7 +64,8 @@ const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
             <select
               name="cantidad"
               value={formData.cantidad}
-              onChange={handleChange}
+              onChange={handleSelectChange}
+              onKeyDown={handleKeyDown}
               className="form-select"
               tabIndex={0}
             >
@@ -64,7 +80,8 @@ const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
             <select
               name="frecuencia"
               value={formData.frecuencia || "Diaria"}
-              onChange={handleChange}
+              onChange={handleSelectChange}
+              onKeyDown={handleKeyDown}
               className="form-select"
               aria-label="Seleccionar frecuencia de recogida"
               tabIndex={0}
@@ -82,7 +99,8 @@ const FormStep3: React.FC<FormStep3Props> = ({ formData, handleChange }) => {
           <select
             name="horario"
             value={formData.horario}
-            onChange={handleChange}
+            onChange={handleSelectChange}
+            onKeyDown={handleKeyDown}
             className="form-select"
             tabIndex={0}
           >
