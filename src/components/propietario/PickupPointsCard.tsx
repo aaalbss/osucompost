@@ -1,42 +1,54 @@
 'use client';
 import { PuntoRecogida } from '@/types/types';
-import { MapPin, Clock, Building, Bookmark, Maximize, Calendar } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ExtendedContenedor } from '@/types/extendedTypes';
+import { MapPin, Clock, Building, Bookmark, Maximize, Calendar, Loader2 } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
 import JsBarcode from 'jsbarcode';
 import './dashboard-styles.css';
 
 interface PickupPointsCardProps {
   puntosRecogida: PuntoRecogida[];
-  contenedores?: {
-    id: number;
-    capacidad: number;
-    frecuencia?: string;
-    tipoResiduo: {
-      id: number;
-      descripcion: string;
-    };
-    puntoRecogida: {
-      id: number;
-      // otros campos...
-    };
-  }[];
+  contenedores?: ExtendedContenedor[];
 }
 
-const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCardProps) => {
+const PickupPointsCard = ({ puntosRecogida = [], contenedores = [] }: PickupPointsCardProps) => {
   // Estado para almacenar los SVG como strings
   const [barcodeSvgs, setBarcodeSvgs] = useState<{[key: number]: string}>({});
   const [isLoading, setIsLoading] = useState<{[key: number]: boolean}>({});
+  // Estado para controlar puntos de recogida filtrados (válidos)
+  const [puntosValidos, setPuntosValidos] = useState<PuntoRecogida[]>([]);
+  
+  // Validar puntos de recogida al recibir los datos
+  useEffect(() => {
+    // Filtrar puntos de recogida inválidos
+    const puntosValidos = puntosRecogida.filter(punto => {
+      // Comprobar campos obligatorios
+      if (!punto.id || !punto.localidad || !punto.direccion || !punto.tipo) {
+        console.warn(`Punto de recogida con datos incompletos:`, punto);
+        return false;
+      }
+      return true;
+    });
+    
+    setPuntosValidos(puntosValidos);
+  }, [puntosRecogida]);
   
   // Función para encontrar contenedores asociados a un punto de recogida
-  const getContenedoresPorPunto = (puntoId: number) => {
+  const getContenedoresPorPunto = useCallback((puntoId: number) => {
     return contenedores.filter(
       contenedor => contenedor.puntoRecogida && contenedor.puntoRecogida.id === puntoId
     );
-  };
+  }, [contenedores]);
 
   // Función para generar el SVG del código de barras como string
-  const generateBarcodeSvg = (containerId: number) => {
+  const generateBarcodeSvg = useCallback((containerId: number) => {
     try {
+      // Marcar como cargando
+      setIsLoading(prev => ({
+        ...prev,
+        [containerId]: true
+      }));
+      
       // Crear un elemento temporal para generar el código
       const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       
@@ -75,33 +87,49 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
       }));
       return null;
     }
-  };
+  }, []);
 
-  // Efecto para generar los códigos de barras al cargar el componente
+  // Efecto para generar los códigos de barras al montar el componente
   useEffect(() => {
-    // Marcar todos los contenedores como "cargando"
+    // Inicializar estados de carga
     const initialLoadingState: {[key: number]: boolean} = {};
-    contenedores.forEach(contenedor => {
+    
+    // Solo procesar contenedores que estén asociados a puntos de recogida válidos
+    const contenedoresValidos = contenedores.filter(contenedor => {
+      // Comprobar que el contenedor tiene un punto de recogida
+      if (!contenedor.puntoRecogida || !contenedor.puntoRecogida.id) {
+        console.warn(`Contenedor sin punto de recogida asociado válido:`, contenedor);
+        return false;
+      }
+      
+      // Comprobar que el punto de recogida existe en la lista de puntos válidos
+      const puntoExiste = puntosValidos.some(punto => punto.id === contenedor.puntoRecogida?.id);
+      if (!puntoExiste) {
+        console.warn(`Contenedor asociado a un punto de recogida que no existe en la lista:`, 
+          contenedor.puntoRecogida.id);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    // Inicializar estados para contenedores válidos
+    contenedoresValidos.forEach(contenedor => {
       initialLoadingState[contenedor.id] = true;
     });
+    
     setIsLoading(initialLoadingState);
     
-    // Generar los códigos de barras con un pequeño retraso para evitar bloqueo de UI
-    const timeoutId = setTimeout(() => {
-      contenedores.forEach(contenedor => {
-        if (!barcodeSvgs[contenedor.id]) {
-          generateBarcodeSvg(contenedor.id);
-        }
-      });
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
-  }, [contenedores]);
+    // Generar códigos de barras para contenedores válidos
+    contenedoresValidos.forEach(contenedor => {
+      generateBarcodeSvg(contenedor.id);
+    });
+  }, [contenedores, puntosValidos, generateBarcodeSvg]);
 
   // Función para imprimir el código de barras
-  const handlePrintBarcode = (contenedorId: number) => {
+  const handlePrintBarcode = useCallback((contenedorId: number) => {
     try {
-      // Generar un nuevo SVG para impresión (con dimensiones diferentes)
+      // Generar un SVG para impresión
       const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       
       JsBarcode(tempSvg, contenedorId.toString(), {
@@ -183,8 +211,9 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
       console.error('Error generando código de barras para impresión:', error);
       alert('Error al generar el código de barras para impresión.');
     }
-  };
+  }, []);
 
+  // Renderizado del componente
   return (
     <div className="dashboard-card card-purple animate-fadeIn" style={{ animationDelay: '0.2s' }}>
       <div className="card-header">
@@ -194,9 +223,9 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
         </h2>
       </div>
       <div className="card-body">
-        {puntosRecogida.length > 0 ? (
+        {puntosValidos.length > 0 ? (
           <div className="space-y-6">
-            {puntosRecogida.map((punto, index) => {
+            {puntosValidos.map((punto, index) => {
               const contenedoresPunto = getContenedoresPorPunto(punto.id);
               
               return (
@@ -233,13 +262,18 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
                       <Clock size={18} className="text-purple-500" />
                       <div>
                         <p className="text-xs font-medium text-purple-700">Horario</p>
-                        <p className="font-medium">{punto.horario || "No especificado"}</p>
+                        <p className="font-medium">
+                          {punto.horario === 'M' && 'Mañana'}
+                          {punto.horario === 'T' && 'Tarde'}
+                          {punto.horario === 'N' && 'Noche'}
+                          {!punto.horario && 'No especificado'}
+                        </p>
                       </div>
                     </div>
                   </div>
                    
                   {/* Sección de contenedores y códigos de barras */}
-                  {contenedoresPunto.length > 0 && (
+                  {contenedoresPunto.length > 0 ? (
                     <div className="pt-4 mt-4 border-t border-purple-200">
                       <p className="mb-4 text-sm font-medium text-purple-800">
                         Contenedores asociados: {contenedoresPunto.length}
@@ -274,24 +308,37 @@ const PickupPointsCard = ({ puntosRecogida, contenedores = [] }: PickupPointsCar
                               </button>
                             </div>
                             
-                            {/* Contenedor del código de barras con renderizado seguro */}
+                            {/* Contenedor del código de barras con renderizado mejorado */}
                             <div 
-                              className="p-4 mt-2 text-center bg-white border rounded-md barcode-container min-h-[100px] flex items-center justify-center"
+                              className="p-4 mt-2 text-center bg-white border rounded-md min-h-[100px] flex items-center justify-center"
                             >
                               {isLoading[contenedor.id] ? (
-                                <div className="text-purple-400">
+                                <div className="flex items-center gap-2 text-purple-400">
+                                  <Loader2 size={16} className="animate-spin" />
                                   Generando código de barras...
                                 </div>
                               ) : barcodeSvgs[contenedor.id] ? (
-                                <div dangerouslySetInnerHTML={{ __html: barcodeSvgs[contenedor.id] }} />
+                                <div className="flex items-center justify-center w-full h-full" dangerouslySetInnerHTML={{ __html: barcodeSvgs[contenedor.id] }} />
                               ) : (
-                                <div className="text-purple-500">
-                                  Error al generar el código de barras
-                                </div>
+                                <button 
+                                  onClick={() => generateBarcodeSvg(contenedor.id)}
+                                  className="px-3 py-2 text-purple-600 bg-purple-100 rounded-md hover:bg-purple-200"
+                                >
+                                  Generar código
+                                </button>
                               )}
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pt-4 mt-4 border-t border-purple-200">
+                      <p className="mb-2 text-sm font-medium text-purple-800">
+                        Contenedores asociados: 0
+                      </p>
+                      <div className="p-4 text-center text-purple-500 bg-white border border-purple-100 rounded-md">
+                        No hay contenedores asociados a este punto de recogida.
                       </div>
                     </div>
                   )}

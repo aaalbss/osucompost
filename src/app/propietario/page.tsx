@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Propietario, PuntoRecogida, Facturacion } from "@/types/types";
-import { ExtendedRecogida } from "@/types/extendedTypes";
+import { Propietario, PuntoRecogida, Facturacion} from "@/types/types";
+import { ExtendedRecogida, ExtendedContenedor } from "@/types/extendedTypes";
 import { cascadeDeleteService } from "@/services/CascadeDeleteService";
 import { contenedorAPI } from "@/services/api"; // Asegúrate de importar contenedorAPI
 import  {formatearTipoResiduo} from "@/utils/formatoResiduos"; // Asegúrate de importar GetTipoResiduo
@@ -37,8 +37,7 @@ export default function PropietarioPage() {
   const [error, setError] = useState("");
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [contenedores, setContenedores] = useState<any[]>([]); // Nuevo estado para contenedores
-  const [datosCargando, setDatosCargando] = useState({
+  const [contenedores, setContenedores] = useState<ExtendedContenedor[]>([]);  const [datosCargando, setDatosCargando] = useState({
     propietario: true,
     puntosRecogida: true,
     facturaciones: true,
@@ -129,7 +128,7 @@ export default function PropietarioPage() {
                 const contenedoresFormateados = contenedoresPunto.map(contenedor => ({
                   ...contenedor,
                   tipoResiduo: formatearTipoResiduo(contenedor.tipoResiduo)
-                }));
+                })) as ExtendedContenedor[];
                 
                 setContenedores(contenedoresFormateados);
               } catch (contenedorError) {

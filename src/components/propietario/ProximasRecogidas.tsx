@@ -102,13 +102,34 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
           const datos = await respuesta.json();
           console.log('Recogidas obtenidas de la base de datos:', datos);
           
-          // Filtrar recogidas futuras (que no han sido recogidas aún)
-          const recogidasFuturas = datos.filter((recogida: ExtendedRecogida) => 
-            !recogida.fechaRecogidaReal && 
-            new Date(recogida.fechaRecogidaEstimada) > ahora
+          // Obtener solo la fecha (sin hora) del día actual para comparar
+          const fechaActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+          
+          // Filtrar recogidas de hoy y futuras (que no han sido recogidas aún)
+          const recogidasFuturas = datos.filter((recogida: ExtendedRecogida) => {
+            if (recogida.fechaRecogidaReal) {
+              return false; // Excluir si ya fue recogida
+            }
+            
+            const fechaEstimada = new Date(recogida.fechaRecogidaEstimada);
+            const soloFechaEstimada = new Date(
+              fechaEstimada.getFullYear(), 
+              fechaEstimada.getMonth(), 
+              fechaEstimada.getDate()
+            );
+            
+            // Incluir si es de hoy o del futuro
+            return soloFechaEstimada >= fechaActual;
+          });
+          
+          // Ordenar por fecha de recogida estimada (más cercanas primero)
+          const recogidasOrdenadas = recogidasFuturas.sort(
+            (a: ExtendedRecogida, b: ExtendedRecogida) => 
+              new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
           );
           
-          setRecogidasDB(recogidasFuturas);
+          console.log('Recogidas filtradas (incluyendo hoy y futuras):', recogidasOrdenadas.length);
+          setRecogidasDB(recogidasOrdenadas);
         } else {
           console.error('Error al obtener recogidas. Status:', respuesta.status);
           setError('Error al obtener las recogidas');
@@ -198,7 +219,7 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     obtenerContenedores();
   }, [contenedorIdNumerico, dniPropietarioSesion, ahora]);
 
-  // Procesar las recogidas y agruparlas por contenedor
+  // Procesar las recogidas y agruparlas por punto de recogida y contenedor
   useEffect(() => {
     if (cargando || contenedoresPropietario.length === 0 || recogidasDB.length === 0) {
       if (!cargando && contenedoresPropietario.length > 0 && recogidasDB.length === 0) {
@@ -231,12 +252,12 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
       );
       
       if (recogidasContenedor.length > 0) {
-        // Ordenar por fecha estimada
+        // Ordenar por fecha estimada (más cercanas primero)
         const recogidasOrdenadas = recogidasContenedor.sort(
           (a, b) => new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
         );
         
-        // Limitar a 5 recogidas
+        // Limitar a las 5 próximas recogidas
         recogidasPorCont[contenedor.id] = recogidasOrdenadas.slice(0, 5);
         console.log(`Recogidas para contenedor ${contenedor.id}:`, recogidasPorCont[contenedor.id].length);
       } else {

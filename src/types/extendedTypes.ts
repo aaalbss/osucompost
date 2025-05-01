@@ -6,6 +6,7 @@ import { PuntoRecogida, TipoResiduo, Propietario } from './types';
 export interface ExtendedContenedor {
   id: number;
   capacidad: number;
+  frecuencia: string;
   tipoResiduo: TipoResiduo;
   puntoRecogida: PuntoRecogida & { // Usa un intersection type para añadir propietario si no está ya en PuntoRecogida
     propietario?: Propietario; // Hacer opcional
