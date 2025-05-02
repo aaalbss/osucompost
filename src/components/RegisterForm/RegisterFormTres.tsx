@@ -14,7 +14,7 @@ interface RegisterFormTresProps {
   onRegisterSuccess?: () => void;
 }
 
-// Función auxiliar para calcular las próximas fechas de recogida según la frecuencia
+// Función auxiliar para calcular la próxima fecha de recogida según la frecuencia
 const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] => {
   // Para frecuencia "Ocasional", no generamos fechas automáticamente
   if (frecuencia === 'Ocasional') {
@@ -45,20 +45,13 @@ const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] 
   // Normalizar a inicio del día
   fechaBase.setHours(0, 0, 0, 0);
   
-  // Determinar la primera fecha de recogida
-  // Para todas las frecuencias, utilizamos la lógica del componente ProximasRecogidas
-  
+  // Determinar la primera fecha de recogida según la frecuencia
   if (frecuencia === 'Diaria') {
     // Para frecuencia diaria, empezamos desde mañana
     fechaBase.setDate(fechaBase.getDate() + 1);
-    
-    // Generar las próximas 5 fechas
-    for (let i = 0; i < 5; i++) {
-      const nuevaFecha = new Date(fechaBase);
-      nuevaFecha.setDate(fechaBase.getDate() + i);
-      nuevaFecha.setHours(hora, 0, 0, 0);
-      fechas.push(nuevaFecha);
-    }
+    const nuevaFecha = new Date(fechaBase);
+    nuevaFecha.setHours(hora, 0, 0, 0);
+    fechas.push(nuevaFecha);
   } 
   else if (frecuencia === '3 por semana') {
     // Lunes, miércoles, viernes
@@ -66,12 +59,14 @@ const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] 
     let diaActual = new Date(fechaBase);
     diaActual.setDate(diaActual.getDate() + 1); // Comenzar desde mañana
     
-    // Buscar las próximas 5 fechas que caigan en lunes, miércoles o viernes
-    while (fechas.length < 5) {
+    // Buscar la próxima fecha que caiga en lunes, miércoles o viernes
+    let encontrado = false;
+    while (!encontrado) {
       if (diasSemana.includes(diaActual.getDay())) {
         const nuevaFecha = new Date(diaActual);
         nuevaFecha.setHours(hora, 0, 0, 0);
         fechas.push(nuevaFecha);
+        encontrado = true;
       }
       diaActual.setDate(diaActual.getDate() + 1);
     }
@@ -81,30 +76,21 @@ const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] 
     const hoyDiaSemana = fechaBase.getDay(); // 0=domingo, 1=lunes, etc.
     const diasHastaLunes = hoyDiaSemana === 1 ? 7 : ((8 - hoyDiaSemana) % 7 || 7); // Días hasta el próximo lunes
     
-    for (let i = 0; i < 5; i++) {
-      const nuevaFecha = new Date(fechaBase);
-      nuevaFecha.setDate(fechaBase.getDate() + diasHastaLunes + (i * 7));
-      nuevaFecha.setHours(hora, 0, 0, 0);
-      fechas.push(nuevaFecha);
-    }
+    const nuevaFecha = new Date(fechaBase);
+    nuevaFecha.setDate(fechaBase.getDate() + diasHastaLunes);
+    nuevaFecha.setHours(hora, 0, 0, 0);
+    fechas.push(nuevaFecha);
   }
   else if (frecuencia === 'Quincenal') {
     // Encontrar el próximo viernes
     const hoyDiaSemana = fechaBase.getDay();
     const diasHastaViernes = hoyDiaSemana <= 5 ? 5 - hoyDiaSemana : 5 + (7 - hoyDiaSemana);
     
-    // Primera fecha: próximo viernes
-    let fechaSiguiente = new Date(fechaBase);
+    // Próximo viernes
+    const fechaSiguiente = new Date(fechaBase);
     fechaSiguiente.setDate(fechaBase.getDate() + diasHastaViernes);
     fechaSiguiente.setHours(hora, 0, 0, 0);
     fechas.push(new Date(fechaSiguiente));
-    
-    // Generar las siguientes 4 fechas (cada 14 días)
-    for (let i = 0; i < 4; i++) {
-      fechaSiguiente = new Date(fechaSiguiente);
-      fechaSiguiente.setDate(fechaSiguiente.getDate() + 14);
-      fechas.push(new Date(fechaSiguiente));
-    }
   }
   else {
     // Caso por defecto (no debería ocurrir con las validaciones)
@@ -112,18 +98,13 @@ const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] 
     
     // Para frecuencia diaria, empezamos desde mañana
     fechaBase.setDate(fechaBase.getDate() + 1);
-    
-    // Generar las próximas 5 fechas
-    for (let i = 0; i < 5; i++) {
-      const nuevaFecha = new Date(fechaBase);
-      nuevaFecha.setDate(fechaBase.getDate() + i);
-      nuevaFecha.setHours(hora, 0, 0, 0);
-      fechas.push(nuevaFecha);
-    }
+    const nuevaFecha = new Date(fechaBase);
+    nuevaFecha.setHours(hora, 0, 0, 0);
+    fechas.push(nuevaFecha);
   }
   
   // Log para depuración
-  console.log(`Fechas generadas para frecuencia ${frecuencia}:`, 
+  console.log(`Fecha generada para frecuencia ${frecuencia}:`, 
     fechas.map(f => `${f.toISOString()} (${f.toLocaleDateString()})`));
     
   return fechas;
@@ -355,7 +336,7 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
     try {
       console.log("Programando recogidas para el propietario:", propietarioDni);
       
-      // Obtener las próximas fechas de recogida según la frecuencia seleccionada
+      // Obtener la próxima fecha de recogida según la frecuencia seleccionada
       const fechasRecogida = calcularProximasRecogidas(formData.frecuencia, formData.horario);
       
       // Si no hay fechas para programar (Ocasional), simplemente terminar
