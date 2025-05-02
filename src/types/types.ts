@@ -1,3 +1,4 @@
+//types.ts
 'use client';
 
 export interface Propietario {

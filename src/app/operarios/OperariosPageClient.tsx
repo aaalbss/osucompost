@@ -45,13 +45,59 @@ const OperariosPageClient: React.FC = () => {
   
   const router = useRouter();
 
+  // Función para limpiar sesiones anteriores
+  const limpiarSesionesAnteriores = () => {
+    // Lista de claves que debemos gestionar
+    const clavesNavegacion = [
+      'fromOperarios',
+      'operarioAcceso',
+      'propietarioDni',
+      'propietarioEmail',
+      'propietarioNombre'
+    ];
+    
+    // Verificar el contexto actual
+    const esPaginaOperario = window.location.pathname.includes('/operarios');
+    
+    // Si estamos en la página de operarios, se debe limpiar
+    // cualquier dato de navegación relacionado con propietarios
+    if (esPaginaOperario) {
+      clavesNavegacion.forEach(clave => {
+        if (localStorage.getItem(clave)) {
+          console.log(`Limpiando clave de navegación: ${clave}`);
+          localStorage.removeItem(clave);
+        }
+      });
+      
+      // Asegurarnos de que tenemos usuario válido de operario
+      const userUsername = localStorage.getItem('userUsername');
+      if (!userUsername || userUsername !== 'OSUCOMPOST') {
+        console.log('Estableciendo sesión de operario por defecto');
+        localStorage.setItem('userUsername', 'OSUCOMPOST');
+      }
+    }
+  };
+
   // Verificar autenticación al cargar el componente
   useEffect(() => {
+    // Limpiar cualquier sesión anterior al cargar la página
+    limpiarSesionesAnteriores();
+    
     // Verificar si el usuario está autenticado
     const userUsername = localStorage.getItem('userUsername');
     if (!userUsername || userUsername !== 'OSUCOMPOST') {
       // Redirigir al login si no está autenticado
       router.push('/');
+      return;
+    }
+    
+    // Comprobar si hay que mostrar una vista específica tras regresar de ficha de propietario
+    const returnToView = localStorage.getItem('returnToView');
+    if (returnToView) {
+      // Establecer la vista correspondiente
+      setVista(returnToView);
+      // Limpiar el flag después de usarlo
+      localStorage.removeItem('returnToView');
     }
   }, [router]);
 
@@ -59,26 +105,49 @@ const OperariosPageClient: React.FC = () => {
   useEffect(() => {
     // Función para manejar el evento beforeunload
     const handleBeforeUnload = () => {
-      // En algunos navegadores, el localStorage no se elimina inmediatamente
-      // al cerrar la pestaña, así que no hacemos nada aquí
+      // No hacer nada aquí, ya que en algunos navegadores
+      // causar cambios aquí puede interferir con la navegación
     };
 
-    // Función para manejar la navegación
-    const handleRouteChange = () => {
-      // Cerrar sesión al cambiar de ruta
-      localStorage.removeItem('userUsername');
+    // Función para cuando se cierra la pestaña o navegador
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Establecer una marca de tiempo para detectar cierres prolongados
+        sessionStorage.setItem('lastHidden', Date.now().toString());
+      } else if (document.visibilityState === 'visible') {
+        // Al volver a la pestaña, verificar cuánto tiempo estuvo oculta
+        const lastHidden = sessionStorage.getItem('lastHidden');
+        if (lastHidden) {
+          const timeHidden = Date.now() - parseInt(lastHidden);
+          // Si estuvo oculta más de 30 minutos, considerar que es una nueva sesión
+          if (timeHidden > 30 * 60 * 1000) {
+            console.log('Sesión expirada por inactividad, refrescando...');
+            window.location.reload();
+          }
+        }
+      }
     };
 
     // Agregar event listeners para detectar salida
     window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Verificar sesión cada vez que la aplicación recibe el foco
+    window.addEventListener('focus', () => {
+      const userUsername = localStorage.getItem('userUsername');
+      if (!userUsername || userUsername !== 'OSUCOMPOST') {
+        console.log('Sesión perdida durante cambio de foco, redirigiendo...');
+        router.push('/');
+      }
+    });
 
     // Limpiar event listeners al desmontar el componente
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Cerrar sesión al desmontar el componente
-      localStorage.removeItem('userUsername');
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', () => {});
     };
-  }, []);
+  }, [router]);
 
   // Ocultar cualquier header global al montar el componente
   useEffect(() => {
@@ -226,6 +295,30 @@ const OperariosPageClient: React.FC = () => {
     }
   };
 
+  // Función para ver la ficha de un propietario en modo operario
+  const handleViewPropietarioFicha = (dni: string) => {
+    const propietario = propietarios.find(p => p.dni === dni);
+    if (!propietario) return;
+    
+    // Almacenar en localStorage que venimos de operarios
+    localStorage.setItem("fromOperarios", "true");
+    
+    // Almacenamos la información del propietario para la ficha
+    localStorage.setItem("propietarioDni", propietario.dni);
+    localStorage.setItem("propietarioEmail", propietario.email || "");
+    localStorage.setItem("propietarioNombre", propietario.nombre || "");
+    localStorage.setItem("operarioAcceso", "true");
+    
+    // Conservar la sesión de operario
+    const userUsername = localStorage.getItem('userUsername');
+    if (userUsername) {
+      localStorage.setItem('operarioUsername', userUsername);
+    }
+    
+    // Redirigir a la página de propietario
+    router.push('/propietario');
+  };
+
   // Función para navegar a un punto de recogida específico
   const handleNavigateToPuntoRecogida = (puntoId: number) => {
     // Verificamos si es una nueva selección o ya estaba seleccionado
@@ -249,9 +342,37 @@ const OperariosPageClient: React.FC = () => {
 
   // Función para manejar el cierre de sesión
   const handleLogout = () => {
-    localStorage.removeItem('userUsername');
-    localStorage.removeItem('cookiesModalShown');
-    router.push('/');
+    console.log('Cerrando sesión de operario...');
+    
+    // Crear lista de todas las claves que deberían limpiarse
+    const clavesALimpiar = [
+      'userUsername',
+      'cookiesModalShown',
+      'operarioUsername',
+      'fromOperarios',
+      'operarioAcceso',
+      'propietarioDni',
+      'propietarioEmail',
+      'propietarioNombre',
+      'returnToView'
+    ];
+    
+    // Limpiar todas las claves
+    clavesALimpiar.forEach(clave => {
+      if (localStorage.getItem(clave)) {
+        console.log(`Limpiando: ${clave}`);
+        localStorage.removeItem(clave);
+      }
+    });
+    
+    // Establecer una cookie de sesión caducada para forzar cierre completo
+    document.cookie = "operarioSesion=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    
+    // Redirigir a la página de inicio con un pequeño retraso
+    // para asegurar que la limpieza se complete
+    setTimeout(() => {
+      router.push('/');
+    }, 100);
   };
 
   // Función personalizada para manejar la navegación
@@ -262,6 +383,8 @@ const OperariosPageClient: React.FC = () => {
     } else {
       // Para otras vistas, actualizar el estado local
       setVista(vista);
+      // Si se navega manualmente a una vista, limpiar el flag de retorno
+      localStorage.removeItem('returnToView');
     }
   };
 
@@ -321,6 +444,7 @@ const OperariosPageClient: React.FC = () => {
                   shouldHighlight={shouldHighlightPropietario}
                   onHighlightComplete={() => handleHighlightComplete('propietario')}
                   onPuntoRecogidaClick={handleNavigateToPuntoRecogida}
+                  onViewFicha={handleViewPropietarioFicha}
                 />
               </>
             )}

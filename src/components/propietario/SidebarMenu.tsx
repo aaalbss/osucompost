@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, LogOut, UserMinus, X } from 'lucide-react';
+import { Home, LogOut, UserMinus, X, ArrowLeft } from 'lucide-react';
 import ConfirmModal from '@/components/ConfirmModal';
 
 interface SidebarMenuProps {
@@ -9,9 +9,16 @@ interface SidebarMenuProps {
   setMenuAbierto: (estado: boolean) => void;
   onLogout: () => void;
   onUnregister: () => void;
+  isOperario?: boolean;
 }
 
-const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: SidebarMenuProps) => {
+const SidebarMenu = ({ 
+  menuAbierto, 
+  setMenuAbierto, 
+  onLogout, 
+  onUnregister,
+  isOperario = false
+}: SidebarMenuProps) => {
   const router = useRouter();
   const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
   const [accionConfirmacion, setAccionConfirmacion] = useState<'logout' | 'unregister' | 'home'>('logout');
@@ -29,6 +36,19 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
   }, []);
 
   const handleActionClick = (accion: 'logout' | 'unregister' | 'home') => {
+    // Si es un operario y la acción es darse de baja, mostrar un mensaje
+    if (isOperario && accion === 'unregister') {
+      alert("Esta acción no está disponible en el modo operario.");
+      return;
+    }
+
+    // Para operarios, el logout es volver a la lista de propietarios, no requiere confirmación
+    if (isOperario && accion === 'logout') {
+      onLogout();
+      setMenuAbierto(false);
+      return;
+    }
+
     setAccionConfirmacion(accion);
     setMostrarConfirmacion(true);
   };
@@ -36,19 +56,16 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
   const handleConfirm = () => {
     if (accionConfirmacion === 'logout') {
       onLogout();
-      // Redirigir a la página principal usando el router de Next.js
-      router.push('/');
+      // Cerrar el menú después de confirmar
+      setMenuAbierto(false);
     } else if (accionConfirmacion === 'unregister') {
       onUnregister();
-      // Redirigir a la página principal usando el router de Next.js
-      router.push('/');
     } else if (accionConfirmacion === 'home') {
       // Redirigir a la página principal sin ejecutar logout o unregister
       router.push('/');
     }
     
     setMostrarConfirmacion(false);
-    setMenuAbierto(false); // Cerrar el menú después de confirmar la acción
   };
 
   const handleCancel = () => {
@@ -75,7 +92,9 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
       >
         <div className="flex flex-col h-full p-4">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-800">Menú</h3>
+            <h3 className="text-lg font-semibold text-gray-800">
+              {isOperario ? 'Menú de Operario' : 'Menú'}
+            </h3>
             <button 
               onClick={() => setMenuAbierto(false)}
               className="p-1 rounded-full hover:bg-gray-100"
@@ -85,7 +104,7 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
           </div>
           
           <div className="flex flex-col flex-1 gap-4">
-            {/* Botón de Inicio */}
+            {/* Botón de Inicio - común para ambos tipos de usuario */}
             <button 
               onClick={() => handleActionClick('home')}
               className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md bg-green-800/10 hover:bg-green-200"
@@ -94,23 +113,36 @@ const SidebarMenu = ({ menuAbierto, setMenuAbierto, onLogout, onUnregister }: Si
               Ir a Inicio
             </button>
             
-            {/* Cerrar Sesión */}
-            <button 
-              onClick={() => handleActionClick('logout')}
-              className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md bg-green-800/10 hover:bg-green-200"
-            >
-              <LogOut className="w-5 h-5" />
-              Cerrar Sesión
-            </button>
-            
-            {/* Darse de Baja */}
-            <button 
-              onClick={() => handleActionClick('unregister')}
-              className="flex items-center gap-2 px-4 py-2 text-red-800 transition duration-300 bg-red-100 rounded-md hover:bg-red-200"
-            >
-              <UserMinus className="w-5 h-5" />
-              Darse de Baja
-            </button>
+            {/* Botones específicos para operarios */}
+            {isOperario ? (
+              <button 
+                onClick={() => onLogout()}
+                className="flex items-center gap-2 px-4 py-2 text-blue-800 transition duration-300 rounded-md bg-blue-800/10 hover:bg-blue-200"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Volver a lista de propietarios
+              </button>
+            ) : (
+              <>
+                {/* Cerrar Sesión - solo para propietarios */}
+                <button 
+                  onClick={() => handleActionClick('logout')}
+                  className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md bg-green-800/10 hover:bg-green-200"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Cerrar Sesión
+                </button>
+                
+                {/* Darse de Baja - solo para propietarios */}
+                <button 
+                  onClick={() => handleActionClick('unregister')}
+                  className="flex items-center gap-2 px-4 py-2 text-red-800 transition duration-300 bg-red-100 rounded-md hover:bg-red-200"
+                >
+                  <UserMinus className="w-5 h-5" />
+                  Darse de Baja
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

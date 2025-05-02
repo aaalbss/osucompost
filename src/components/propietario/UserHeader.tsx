@@ -16,14 +16,19 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
   const [activeRoute, setActiveRoute] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isOperario, setIsOperario] = useState(false);
   
   // Estado para el modal de confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState('/');
   
-  // Mostrar el nombre del usuario en la consola para depuración
+  // Verificar si es un operario al montar el componente
   useEffect(() => {
-    console.log(`Usuario actual: ${propietarioNombre}`);
+    const operarioAcceso = localStorage.getItem("operarioAcceso") === "true";
+    const fromOperarios = localStorage.getItem("fromOperarios") === "true";
+    setIsOperario(operarioAcceso && fromOperarios);
+    
+    console.log(`Usuario actual: ${propietarioNombre}, Es operario: ${operarioAcceso && fromOperarios}`);
   }, [propietarioNombre]);
 
   // Set active route based on current pathname
@@ -105,11 +110,11 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
           isScrolled ? 'shadow-md py-2' : 'shadow-sm py-4'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             {/* OSUCOMPOST Title/Logo with hover effect */}
             <div 
-              className="cursor-pointer text-green-800 font-bold text-2xl relative group"
+              className="relative text-2xl font-bold text-green-800 cursor-pointer group"
               onClick={() => handleNavigationWithConfirm('/')}
             >
               OSUCOMPOST
@@ -117,7 +122,7 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
             </div>
             
             {/* Desktop Navigation Menu - Hidden on mobile */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="items-center hidden space-x-4 md:flex">
               {/* Home Button */}
               <button 
                 onClick={() => handleNavigationWithConfirm('/')}
@@ -157,23 +162,25 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
                 <span>Estadísticas</span>
               </button>
               
-              {/* Solicitar Recogida Button */}
-              <button 
-                onClick={() => navigateTo('/propietario/solicitud-recogida')}
-                className={`flex items-center px-4 py-2 rounded transition-all duration-200 ${
-                  isActive('/propietario/solicitud-recogida')
-                    ? 'bg-green-600 text-white' 
-                    : 'text-green-800 hover:bg-green-50'
-                }`}
-              >
-                <Calendar className="mr-2" size={20} />
-                <span>Solicitar Recogida</span>
-              </button>
+              {/* Solicitar Recogida Button - Solo mostrar si NO es un operario */}
+              {!isOperario && (
+                <button 
+                  onClick={() => navigateTo('/propietario/solicitud-recogida')}
+                  className={`flex items-center px-4 py-2 rounded transition-all duration-200 ${
+                    isActive('/propietario/solicitud-recogida')
+                      ? 'bg-green-600 text-white' 
+                      : 'text-green-800 hover:bg-green-50'
+                  }`}
+                >
+                  <Calendar className="mr-2" size={20} />
+                  <span>Solicitar Recogida</span>
+                </button>
+              )}
               
               {/* Configuración Button */}
               <button 
                 onClick={handleOpenSideMenu}
-                className="flex items-center px-4 py-2 text-green-800 hover:bg-green-50 rounded transition-all duration-200"
+                className="flex items-center px-4 py-2 text-green-800 transition-all duration-200 rounded hover:bg-green-50"
               >
                 <Menu className="mr-2" size={20} />
                 <span>Más</span>
@@ -184,7 +191,7 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
             <div className="flex md:hidden">
               <button 
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 text-green-800 hover:bg-green-50 rounded transition-all duration-200"
+                className="p-2 text-green-800 transition-all duration-200 rounded hover:bg-green-50"
               >
                 {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
@@ -201,10 +208,10 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
         <div className={`fixed top-0 left-0 w-64 h-full bg-white shadow-lg transform transition-transform duration-300 z-50 md:hidden ${
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
-          <div className="p-4 flex flex-col h-full">
-            <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col h-full p-4">
+            <div className="flex items-center justify-between mb-6">
               <div 
-                className="text-green-800 font-bold text-xl cursor-pointer"
+                className="text-xl font-bold text-green-800 cursor-pointer"
                 onClick={() => handleNavigationWithConfirm('/')}
               >
                 OSUCOMPOST
@@ -217,7 +224,7 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
               </button>
             </div>
             
-            <div className="flex-1 flex flex-col gap-4">
+            <div className="flex flex-col flex-1 gap-4">
               {/* Mobile Navigation Items */}
               <button 
                 onClick={() => handleNavigationWithConfirm('/')}
@@ -255,23 +262,26 @@ const UserHeader = ({ onOpenMenu, propietarioNombre = 'Usuario' }: UserHeaderPro
                 Estadísticas
               </button>
               
-              <button 
-                onClick={() => navigateTo('/propietario/solicitud-recogida')}
-                className={`py-2 px-4 rounded-md flex items-center gap-2 transition duration-300 ${
-                  isActive('/propietario/solicitud-recogida')
-                    ? 'bg-green-600 text-white' 
-                    : 'text-green-800 hover:bg-green-50'
-                }`}
-              >
-                <Calendar size={20} />
-                Solicitar Recogida
-              </button>
+              {/* Solicitar Recogida Button - Solo mostrar si NO es un operario */}
+              {!isOperario && (
+                <button 
+                  onClick={() => navigateTo('/propietario/solicitud-recogida')}
+                  className={`py-2 px-4 rounded-md flex items-center gap-2 transition duration-300 ${
+                    isActive('/propietario/solicitud-recogida')
+                      ? 'bg-green-600 text-white' 
+                      : 'text-green-800 hover:bg-green-50'
+                  }`}
+                >
+                  <Calendar size={20} />
+                  Solicitar Recogida
+                </button>
+              )}
               
-              <div className="border-t border-gray-200 my-2"></div>
+              <div className="my-2 border-t border-gray-200"></div>
               
               <button 
                 onClick={handleOpenSideMenu}
-                className="py-2 px-4 text-green-800 hover:bg-green-50 rounded-md flex items-center gap-2 transition duration-300"
+                className="flex items-center gap-2 px-4 py-2 text-green-800 transition duration-300 rounded-md hover:bg-green-50"
               >
                 <Menu size={20} />
                 Más opciones

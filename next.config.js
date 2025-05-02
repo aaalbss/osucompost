@@ -19,6 +19,21 @@ const nextConfig = {
       },
     ];
   },
+  // Añadir configuración de webpack para eliminar logs en producción
+  webpack: (config, { isServer, dev }) => {
+    // Solo aplicar en el entorno del cliente (no servidor) y en producción
+    if (!isServer && !dev) {
+      config.optimization.minimizer.forEach((plugin) => {
+        if (plugin.constructor.name === 'TerserPlugin') {
+          if (!plugin.options.terserOptions.compress) {
+            plugin.options.terserOptions.compress = {};
+          }
+          plugin.options.terserOptions.compress.drop_console = true;
+        }
+      });
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

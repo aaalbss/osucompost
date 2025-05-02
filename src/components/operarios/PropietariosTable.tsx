@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Propietario } from '@/types/types';
+import { useRouter } from 'next/navigation';
 
 interface PropietariosTableProps {
   propietarios: Propietario[];
@@ -10,6 +11,7 @@ interface PropietariosTableProps {
   shouldHighlight?: boolean;
   onHighlightComplete?: () => void;
   onPuntoRecogidaClick?: (puntoId: number) => void;
+  onViewFicha?: (dni: string) => void;
 }
 
 const PropietariosTable: React.FC<PropietariosTableProps> = ({ 
@@ -18,7 +20,8 @@ const PropietariosTable: React.FC<PropietariosTableProps> = ({
   selectedDni = null,
   shouldHighlight = false,
   onHighlightComplete,
-  onPuntoRecogidaClick
+  onPuntoRecogidaClick,
+  onViewFicha
 }) => {
   const [ordenPor, setOrdenPor] = useState<string>('nombre');
   const [direccionOrden, setDireccionOrden] = useState<'asc' | 'desc'>('asc');
@@ -26,6 +29,7 @@ const PropietariosTable: React.FC<PropietariosTableProps> = ({
   const [exito, setExito] = useState<string | null>(null);
   const [highlightActive, setHighlightActive] = useState<boolean>(false);
   const selectedRowRef = useRef<HTMLTableRowElement>(null);
+  const router = useRouter();
 
   // Efecto para gestionar el desplazamiento y el resaltado
   useEffect(() => {
@@ -124,6 +128,33 @@ const PropietariosTable: React.FC<PropietariosTableProps> = ({
     }
   };
 
+  // Función para redirigir al usuario a la ficha del propietario
+  const handleVerFicha = (propietario: Propietario) => {
+    // Si tenemos un handler personalizado en las props, lo usamos
+    if (onViewFicha) {
+      onViewFicha(propietario.dni);
+      return;
+    }
+
+    // Guardar la información del propietario para la ficha
+    localStorage.setItem('propietarioDni', propietario.dni);
+    localStorage.setItem('propietarioEmail', propietario.email || '');
+    localStorage.setItem('propietarioNombre', propietario.nombre || '');
+    localStorage.setItem('operarioAcceso', 'true'); // Flag para identificar que es un operario accediendo
+    
+    // Establecer flag de que venimos de operarios
+    localStorage.setItem('fromOperarios', 'true');
+    
+    // Preservar la sesión del operario
+    const userUsername = localStorage.getItem('userUsername');
+    if (userUsername) {
+      localStorage.setItem('operarioUsername', userUsername);
+    }
+    
+    // Redirigir a la página de propietarios
+    router.push('/propietario');
+  };
+
   return (
     <div className="overflow-hidden bg-white rounded-lg shadow">
       {/* Mensajes de estado */}
@@ -192,12 +223,18 @@ const PropietariosTable: React.FC<PropietariosTableProps> = ({
                   </span>
                 )}
               </th>
+              <th
+                scope="col"
+                className="px-6 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase"
+              >
+                Ficha de usuario
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {propietariosOrdenados.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-4 text-sm text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-4 text-sm text-center text-gray-500">
                   No se encontraron propietarios
                 </td>
               </tr>
@@ -231,6 +268,14 @@ const PropietariosTable: React.FC<PropietariosTableProps> = ({
                     </td>
                     <td className="px-6 py-4 text-sm text-center text-gray-500 whitespace-nowrap">
                       {propietario.email}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-center whitespace-nowrap">
+                      <button
+                        onClick={() => handleVerFicha(propietario)}
+                        className="text-sm font-medium text-green-600 underline hover:text-green-800"
+                      >
+                        Ver ficha de usuario
+                      </button>
                     </td>
                   </tr>
                 );

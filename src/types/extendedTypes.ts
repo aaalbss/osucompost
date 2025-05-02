@@ -1,3 +1,4 @@
+//extendedTypes.ts
 'use client';
 
 import { PuntoRecogida, TipoResiduo, Propietario } from './types';
