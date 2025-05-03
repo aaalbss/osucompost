@@ -185,7 +185,7 @@ const ConfirmationModal: React.FC<{
         </p>
         
         <p className="mb-4 text-sm text-gray-500">
-          Este cambio afectará solo a esta solicitud de recogida puntual.
+          Cambiará el horario de preferencia asociado al punto de recogida.
           ¿Está seguro de que desea continuar?
         </p>
         
@@ -715,7 +715,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
       const puntoRecogidaDelPropietario = puntosRecogida.find(p => 
         p && p.propietario && p.propietario.dni === dni
       );
-
+  
       if (!puntoRecogidaDelPropietario) {
         setError('No se encontró el punto de recogida asociado a su cuenta. Contacte con administración.');
         setCargando(false);
@@ -725,12 +725,12 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
       // Convertir horario frontend a API
       const horarioApi = horario === 'manana' ? 'M' : horario === 'tarde' ? 'T' : 'N';
       
-      // Variable para almacenar el punto de recogida a usar
+      // Variables para almacenar el punto de recogida y contenedor a usar
       let puntoRecogidaRespuesta = puntoRecogidaDelPropietario;
       let crearNuevoContenedor = isNewContainer;
       let contenedorOriginal = null;
-
-      // Si seleccionó un contenedor existente, verificamos si hay cambio de horario
+  
+      // Si seleccionó un contenedor existente
       if (!isNewContainer && selectedContainerId) {
         // Buscar exactamente el contenedor seleccionado por el usuario
         contenedorOriginal = contenedoresUsuario.find(c => c.id === selectedContainerId);
@@ -742,107 +742,108 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
         }
         
         if (contenedorOriginal && contenedorOriginal.puntoRecogida) {
-          // IMPORTANTE: Usar el punto de recogida del contenedor seleccionado,
-          // no el punto predeterminado del propietario
-          puntoRecogidaRespuesta = {
-            ...contenedorOriginal.puntoRecogida,
-            id: contenedorOriginal.puntoRecogida.id || 0
-          };
-          
-          console.log('Usando punto de recogida del contenedor seleccionado:', 
-            contenedorOriginal.puntoRecogida.id);
-          
           const horarioActual = contenedorOriginal.puntoRecogida.horario;
           console.log('Contenedor seleccionado ID:', contenedorOriginal.id);
           console.log('Horario actual del contenedor seleccionado:', horarioActual);
           console.log('Nuevo horario seleccionado:', horarioApi);
           
-          // Si el horario ha cambiado, necesitamos crear un nuevo contenedor y punto de recogida
-          if (horarioActual !== horarioApi) {
-            console.log('Se detectó cambio de horario. Se creará un nuevo contenedor temporal.');
-            crearNuevoContenedor = true;
+          // Si el horario seleccionado es diferente del actual, actualizar el punto de recogida
+          if (horarioApi !== horarioActual) {
+            console.log('El horario ha cambiado, actualizando el punto de recogida existente');
             
-            // Crear un nuevo punto de recogida basado en el del contenedor seleccionado
-            const nuevoPuntoRecogida = {
-              ...puntoRecogidaRespuesta,
-              id: 0,
-              horario: horarioApi,
-              frecuencia: FRECUENCIA_MAPPING.ocasional,  // Añadir esta línea
-              esPuntual: true,
-              propietario: {
-                dni: dni
-              }
+            // Actualizar el punto de recogida con el nuevo horario
+            const puntoRecogidaActualizado = {
+              ...contenedorOriginal.puntoRecogida,
+              horario: horarioApi // Actualizar el horario
             };
             
-            console.log('Creando nuevo punto de recogida temporal con nuevo horario:', 
-              JSON.stringify(nuevoPuntoRecogida));
+            console.log('Actualizando punto de recogida con nuevo horario:', 
+              JSON.stringify(puntoRecogidaActualizado));
             
-            // Crear nuevo punto de recogida
-            const respuestaPuntoRecogida = await fetch(`${API_URL}/puntos-recogida`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(nuevoPuntoRecogida)
-            });
-            
-            if (!respuestaPuntoRecogida.ok) {
-              const errorText = await respuestaPuntoRecogida.text();
-              console.error('Error al crear punto de recogida temporal:', errorText);
-              throw new Error(`Error al crear el punto de recogida temporal: ${respuestaPuntoRecogida.status}`);
+            // Actualizar el punto de recogida existente
+            try {
+              const respuestaActualizacion = await fetch(`${API_URL}/puntos-recogida/${contenedorOriginal.puntoRecogida.id}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(puntoRecogidaActualizado)
+              });
+              
+              if (!respuestaActualizacion.ok) {
+                console.warn('No se pudo actualizar el punto de recogida, utilizando el original');
+                puntoRecogidaRespuesta = contenedorOriginal.puntoRecogida;
+                
+                // En la respuesta, asegurarse de usar el horario seleccionado
+                puntoRecogidaRespuesta = {
+                  ...puntoRecogidaRespuesta,
+                  horario: horarioApi
+                };
+              } else {
+                puntoRecogidaRespuesta = await respuestaActualizacion.json();
+                console.log('Punto de recogida actualizado correctamente:', JSON.stringify(puntoRecogidaRespuesta));
+              }
+            } catch (error) {
+              console.warn('Error al actualizar el punto de recogida:', error);
+              puntoRecogidaRespuesta = {
+                ...contenedorOriginal.puntoRecogida,
+                horario: horarioApi // Asegurar que tiene el horario correcto
+              };
             }
-            
-            puntoRecogidaRespuesta = await respuestaPuntoRecogida.json();
-            console.log('Punto de recogida temporal creado:', JSON.stringify(puntoRecogidaRespuesta));
           } else {
-            console.log('Usando punto de recogida existente sin cambios');
+            // Si el horario no ha cambiado, usar el punto de recogida existente
+            console.log('El horario no ha cambiado, usando el punto de recogida existente');
+            puntoRecogidaRespuesta = contenedorOriginal.puntoRecogida;
           }
         }
       } else if (isNewContainer) {
         // Si es un nuevo contenedor, usamos el punto de recogida del propietario
-        // y creamos un nuevo punto con el horario seleccionado
+        // o creamos uno nuevo si el horario es diferente
         
-        // Comprobar si el horario del punto de recogida ha cambiado
         const horarioActualDelPunto = puntoRecogidaDelPropietario.horario;
-
-        // Si hay cambio de horario o se seleccionó crear nuevo punto, creamos un punto temporal
+  
+        // Si hay cambio de horario o se seleccionó crear nuevo punto, actualizamos el punto existente
         if (horarioApi !== horarioActualDelPunto) {
-          // Crear un nuevo punto de recogida para el horario modificado
-          const nuevoPuntoRecogida = {
-            ...puntoRecogidaRespuesta,
-            id: 0,
-            horario: horarioApi,
-            frecuencia: FRECUENCIA_MAPPING.ocasional,  // Añadir esta línea
-            esPuntual: true,
-            propietario: {
-              dni: dni
-            }
+          // Actualizar el punto de recogida existente con el nuevo horario
+          const puntoRecogidaActualizado = {
+            ...puntoRecogidaDelPropietario,
+            horario: horarioApi
           };
           
-          console.log('Creando nuevo punto de recogida temporal con nuevo horario:', 
-            JSON.stringify(nuevoPuntoRecogida));
+          console.log('Actualizando el punto de recogida existente con nuevo horario:', 
+            JSON.stringify(puntoRecogidaActualizado));
           
-          // Crear nuevo punto de recogida
-          const respuestaPuntoRecogida = await fetch(`${API_URL}/puntos-recogida`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(nuevoPuntoRecogida)
-          });
-          
-          if (!respuestaPuntoRecogida.ok) {
-            const errorText = await respuestaPuntoRecogida.text();
-            console.error('Error al crear punto de recogida temporal:', errorText);
-            throw new Error(`Error al crear el punto de recogida temporal: ${respuestaPuntoRecogida.status}`);
+          // Actualizar el punto de recogida
+          try {
+            const respuestaActualizacion = await fetch(`${API_URL}/puntos-recogida/${puntoRecogidaDelPropietario.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(puntoRecogidaActualizado)
+            });
+            
+            if (!respuestaActualizacion.ok) {
+              console.warn('No se pudo actualizar el punto de recogida, utilizando el original');
+              puntoRecogidaRespuesta = {
+                ...puntoRecogidaDelPropietario,
+                horario: horarioApi // Asegurar que tiene el horario correcto
+              };
+            } else {
+              puntoRecogidaRespuesta = await respuestaActualizacion.json();
+              console.log('Punto de recogida actualizado correctamente:', JSON.stringify(puntoRecogidaRespuesta));
+            }
+          } catch (error) {
+            console.warn('Error al actualizar el punto de recogida:', error);
+            puntoRecogidaRespuesta = {
+              ...puntoRecogidaDelPropietario,
+              horario: horarioApi // Asegurar que tiene el horario correcto
+            };
           }
-          
-          puntoRecogidaRespuesta = await respuestaPuntoRecogida.json();
-          console.log('Punto de recogida temporal creado:', JSON.stringify(puntoRecogidaRespuesta));
         }
       }
-
-      // Determinar si usar un contenedor existente o crear uno nuevo
+  
+      // Determinar el contenedor a usar
       let contenedorSeleccionado: Contenedor | null = null;
       
       if (crearNuevoContenedor) {
@@ -863,7 +864,6 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
         
         // Crear un nuevo contenedor temporal para esta recogida puntual
         const nuevoContenedor = {
-          // Si estamos modificando un contenedor existente, usamos sus valores
           capacidad: selectedCapacity,
           tipoResiduo: {
             id: tipoResiduoId
@@ -875,7 +875,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
             }
           },
           esPuntual: true, // Marcamos como contenedor temporal
-          frecuencia: FRECUENCIA_MAPPING.ocasional // Añadir esta línea
+          frecuencia: FRECUENCIA_MAPPING.ocasional
         };
         
         console.log('Creando contenedor temporal para recogida puntual:', JSON.stringify(nuevoContenedor));
@@ -898,9 +898,8 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
         contenedorSeleccionado = await respuestaContenedor.json();
         console.log('Contenedor temporal creado según API:', JSON.stringify(contenedorSeleccionado));
       } else {
-        // Usar el contenedor existente seleccionado sin cambios
-        // Aquí es donde estaba el error: debemos usar el contenedor específicamente seleccionado
-        contenedorSeleccionado = contenedoresUsuario.find(c => c.id === selectedContainerId) || null;
+        // IMPORTANTE: Usar SIEMPRE el contenedor original
+        contenedorSeleccionado = contenedorOriginal || contenedoresUsuario.find(c => c.id === selectedContainerId) || null;
         
         if (!contenedorSeleccionado) {
           setError('No se pudo encontrar el contenedor seleccionado');
@@ -920,21 +919,21 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
       } else {
         fecha.setHours(23, 0, 0, 0);
       }
-
+  
       // Asegurarse de que contenedorSeleccionado no es nulo
       if (!contenedorSeleccionado) {
         setError('Error: No se ha podido obtener información del contenedor');
         setCargando(false);
         return;
       }
-
-      // Crear la recogida con el contenedor seleccionado o nuevo
+  
+      // Crear la recogida con el contenedor seleccionado y el punto actualizado
       const nuevaRecogida = {
         fechaSolicitud: new Date().toISOString(),
         fechaRecogidaEstimada: fecha.toISOString(),
         fechaRecogidaReal: null,
         incidencias: null,
-        frecuencia: FRECUENCIA_MAPPING.ocasional,  // Cambia de "Ocasional" a "O"
+        frecuencia: FRECUENCIA_MAPPING.ocasional,
         contenedor: {
           id: contenedorSeleccionado.id,
           capacidad: contenedorSeleccionado.capacidad,
@@ -948,11 +947,17 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
         },
         puntoRecogidaId: puntoRecogidaRespuesta.id,
         horarioSeleccionado: horarioApi,
+        horario: horarioApi,
+        puntoRecogida: {
+          ...puntoRecogidaRespuesta,
+          horario: horarioApi // Asegurarnos de que tiene el horario correcto
+        },
         esPuntual: true
       };
       
       console.log('Enviando recogida con contenedor ID:', contenedorSeleccionado.id);
       console.log('Enviando recogida con punto de recogida ID:', puntoRecogidaRespuesta.id);
+      console.log('Enviando recogida con horario:', horarioApi);
       console.log('Datos completos de la recogida:', JSON.stringify(nuevaRecogida));
       
       // Añadir un pequeño retardo para asegurar que la transacción anterior se completó
@@ -977,6 +982,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
       console.log('Recogida creada correctamente con ID:', recogidaCreada.id);
       console.log('Asociada al contenedor ID:', contenedorSeleccionado.id);
       console.log('Asociada al punto de recogida ID:', puntoRecogidaRespuesta.id);
+      console.log('Con horario:', recogidaCreada.horarioSeleccionado || recogidaCreada.horario || 'No especificado');
       
       setExito(true);
       setDni('');

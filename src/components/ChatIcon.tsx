@@ -40,11 +40,11 @@ const ChatIcon: React.FC<ChatIconProps> = ({ onClick, imageSrc, isOpen }) => {
   return (
     <div className="relative">
       {showMessage && !isOpen && (
-        <div className="absolute bottom-full mb-2 right-0 bg-white rounded-lg p-3 shadow-lg max-w-xs w-48">
+        <div className="absolute right-0 w-48 max-w-xs p-3 mb-2 bg-white rounded-lg shadow-lg bottom-full">
           <div className="text-sm text-gray-700">
-            ¡Hola! soy CHAVO, ¿puedo ayudarte en algo?
+            ¡Hola! soy CHAVO, ¿puedo ayudarle en algo?
           </div>
-          <div className="absolute bottom-0 right-8 transform translate-y-1/2 rotate-45 w-4 h-4 bg-white" />
+          <div className="absolute bottom-0 w-4 h-4 transform rotate-45 translate-y-1/2 bg-white right-8" />
         </div>
       )}
       <div 
@@ -59,7 +59,7 @@ const ChatIcon: React.FC<ChatIconProps> = ({ onClick, imageSrc, isOpen }) => {
             alt="Chat Icon"
             width={100}
             height={100}
-            className="rounded-full object-cover"
+            className="object-cover rounded-full"
           />
         </div>
       </div>

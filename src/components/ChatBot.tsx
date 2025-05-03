@@ -20,7 +20,7 @@ const Chatbot: React.FC = () => {
       // Pequeño retraso para que se vea natural
       const timer = setTimeout(() => {
         setMessages([
-          { sender: 'bot', text: '¡Hola! Soy CHAVO,el asistente virtual de OSUCOMPOST. ¿En qué puedo ayudarte hoy?' }
+          { sender: 'bot', text: '¡Hola! Soy CHAVO,el asistente virtual de OSUCOMPOST. ¿En qué puedo ayudarle hoy?' }
         ]);
         setHasGreeted(true);
       }, 500);
