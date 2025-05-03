@@ -21,6 +21,62 @@ const HORARIO_MAPPING: Record<string, string> = {
   'noche': 'N'    // noche -> N
 };
 
+// Función para calcular las próximas fechas según la frecuencia
+const calcularFechasFuturas = (fechaInicio: Date, frecuencia: string, cantidad = 5): string[] => {
+  const fechas = [];
+  let fechaActual = new Date(fechaInicio);
+  
+  // Convertir frecuencia a un formato estandarizado
+  const frecuenciaLower = frecuencia.toLowerCase();
+  
+  // Primera fecha es la actual
+  fechas.push(new Date(fechaActual));
+  
+  // Determinar el intervalo basado en la frecuencia
+  let diasIntervalo = 1; // Por defecto, diaria
+  
+  if (frecuenciaLower === 'diaria' || frecuenciaLower.includes('dia')) {
+    diasIntervalo = 1;
+  } else if (frecuenciaLower === 'semanal' || frecuenciaLower.includes('semana')) {
+    diasIntervalo = 7;
+    
+    // Manejar casos como "3 por semana" o "2 por semana"
+    if (frecuenciaLower.includes('por semana')) {
+      const vecesXSemana = parseInt(frecuencia.match(/(\d+)/)?.[0] || '1');
+      if (vecesXSemana > 0) {
+        // Calcular el intervalo según el número de veces por semana
+        diasIntervalo = Math.floor(7 / vecesXSemana);
+      }
+    }
+  } else if (frecuenciaLower === 'quincenal' || frecuenciaLower.includes('quince')) {
+    diasIntervalo = 15;
+  } else if (frecuenciaLower === 'mensual' || frecuenciaLower.includes('mes')) {
+    // Para mensual, añadimos un mes en cada iteración
+    for (let i = 1; i < cantidad; i++) {
+      let nuevaFecha = new Date(fechaActual);
+      nuevaFecha.setMonth(nuevaFecha.getMonth() + 1);
+      fechas.push(nuevaFecha);
+      fechaActual = nuevaFecha;
+    }
+    
+    // Convertir a formato YYYY-MM-DD y retornar para frecuencia mensual
+    return fechas.map(fecha => fecha.toISOString().split('T')[0]);
+  }
+  
+  // Para todas las frecuencias excepto mensual, calculamos las fechas con el intervalo determinado
+  if (frecuenciaLower !== 'mensual' && !frecuenciaLower.includes('mes')) {
+    for (let i = 1; i < cantidad; i++) {
+      let nuevaFecha = new Date(fechaActual);
+      nuevaFecha.setDate(nuevaFecha.getDate() + diasIntervalo);
+      fechas.push(nuevaFecha);
+      fechaActual = nuevaFecha;
+    }
+  }
+  
+  // Convertir a formato YYYY-MM-DD
+  return fechas.map(fecha => fecha.toISOString().split('T')[0]);
+};
+
 const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
   onRegisterSuccess,
 }) => {
@@ -29,6 +85,7 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [recogidas, setRecogidas] = useState<Recogida[]>([]);
+  const [fechasRecogida, setFechasRecogida] = useState<string[]>([]);
   // Flag para controlar si el botón de submit ha sido presionado explícitamente
   const [submitButtonPressed, setSubmitButtonPressed] = useState(false);
   const [recogidaCreada, setRecogidaCreada] = useState(false);
@@ -58,11 +115,12 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
   const crearRecogidaDirecta = useCallback(async (datosNormalizados: any) => {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
     
-    // Calcular la fecha para hoy (mismo día del registro)
+    // Calcular la fecha para hoy
     const fechaHoy = new Date();
     
-    // Convertir fechas al formato YYYY-MM-DD
-    const fechaHoyFormateada = fechaHoy.toISOString().split('T')[0];
+    // Generar las próximas 5 fechas según la frecuencia
+    const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
+    setFechasRecogida(fechasRecogida);
     
     // Obtener el horario en formato API
     const horarioApi = HORARIO_MAPPING[datosNormalizados.horario] || 'M';
@@ -79,66 +137,74 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
         console.log('Información del propietario encontrada:', propietarioInfo);
       }
       
-      // Intentar diferentes formatos de recogida
+      let recogidaExitosa = false;
+      const fechasCreadas = [];
       
-      // Formato 1: Con propietarioDni
-      const recogidaEstandar1 = {
-        fechaSolicitud: fechaHoyFormateada,
-        fechaRecogidaEstimada: fechaHoyFormateada,
-        fechaRecogidaReal: null,
-        incidencias: null,
-        estado: "pendiente",
-        propietarioDni: datosNormalizados.dni
-      };
-      
-      console.log('Intentando formato 1 de recogida:', JSON.stringify(recogidaEstandar1, null, 2));
-      
-      const recogidaResponse1 = await fetch(`${API_BASE_URL}/recogidas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recogidaEstandar1),
-      });
-      
-      if (recogidaResponse1.ok) {
-        const recogidaCreada = await recogidaResponse1.json();
-        console.log('Recogida creada exitosamente con formato 1:', recogidaCreada);
-        return true;
-      }
-      
-      console.log('Formato 1 falló, intentando formato 2...');
-      
-      // Formato 2: Con propietario objeto
-      const recogidaEstandar2 = {
-        fechaSolicitud: fechaHoyFormateada,
-        fechaRecogidaEstimada: fechaHoyFormateada,
-        fechaRecogidaReal: null,
-        incidencias: null,
-        estado: "pendiente",
-        propietario: {
-          dni: datosNormalizados.dni
+      // Intentar crear recogidas para cada fecha
+      for (const fecha of fechasRecogida) {
+        // Intentar diferentes formatos de recogida
+        
+        // Formato 1: Con propietarioDni
+        const recogidaEstandar1 = {
+          fechaSolicitud: fechasRecogida[0], // La fecha de solicitud siempre es hoy
+          fechaRecogidaEstimada: fecha,
+          fechaRecogidaReal: null,
+          incidencias: null,
+          estado: "pendiente",
+          propietarioDni: datosNormalizados.dni
+        };
+        
+        console.log(`Intentando formato 1 de recogida para fecha ${fecha}:`, JSON.stringify(recogidaEstandar1, null, 2));
+        
+        const recogidaResponse1 = await fetch(`${API_BASE_URL}/recogidas`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(recogidaEstandar1),
+        });
+        
+        if (recogidaResponse1.ok) {
+          const recogidaCreada = await recogidaResponse1.json();
+          console.log(`Recogida creada exitosamente con formato 1 para fecha ${fecha}:`, recogidaCreada);
+          fechasCreadas.push(fecha);
+          continue; // Pasar a la siguiente fecha
         }
-      };
-      
-      console.log('Intentando formato 2 de recogida:', JSON.stringify(recogidaEstandar2, null, 2));
-      
-      const recogidaResponse2 = await fetch(`${API_BASE_URL}/recogidas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recogidaEstandar2),
-      });
-      
-      if (recogidaResponse2.ok) {
-        const recogidaCreada = await recogidaResponse2.json();
-        console.log('Recogida creada exitosamente con formato 2:', recogidaCreada);
-        return true;
+        
+        console.log(`Formato 1 falló para fecha ${fecha}, intentando formato 2...`);
+        
+        // Formato 2: Con propietario objeto
+        const recogidaEstandar2 = {
+          fechaSolicitud: fechasRecogida[0], // La fecha de solicitud siempre es hoy
+          fechaRecogidaEstimada: fecha,
+          fechaRecogidaReal: null,
+          incidencias: null,
+          estado: "pendiente",
+          propietario: {
+            dni: datosNormalizados.dni
+          }
+        };
+        
+        console.log(`Intentando formato 2 de recogida para fecha ${fecha}:`, JSON.stringify(recogidaEstandar2, null, 2));
+        
+        const recogidaResponse2 = await fetch(`${API_BASE_URL}/recogidas`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(recogidaEstandar2),
+        });
+        
+        if (recogidaResponse2.ok) {
+          const recogidaCreada = await recogidaResponse2.json();
+          console.log(`Recogida creada exitosamente con formato 2 para fecha ${fecha}:`, recogidaCreada);
+          fechasCreadas.push(fecha);
+        } else {
+          console.log(`Ambos formatos fallaron para fecha ${fecha}`);
+        }
       }
       
-      console.log('Ambos formatos fallaron');
-      return false;
+      return fechasCreadas.length > 0;
     } catch (error) {
       console.error('Error al crear recogida directa:', error);
       return false;
@@ -199,47 +265,57 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
       
       // Fecha actual
       const fechaHoy = new Date();
-      const fechaHoyFormateada = fechaHoy.toISOString().split('T')[0];
       
-      // Crear objeto recogida exactamente como el formato de la API
-      const recogida = {
-        fechaSolicitud: fechaHoyFormateada,
-        fechaRecogidaEstimada: fechaHoyFormateada,
-        fechaRecogidaReal: null,
-        incidencias: null,
-        contenedor: {
-          id: contenedor.id,
-          capacidad: contenedor.capacidad,
-          frecuencia: datosNormalizados.frecuencia,
-          tipoResiduo: contenedor.tipoResiduo
+      // Generar las próximas 5 fechas según la frecuencia
+      const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
+      setFechasRecogida(fechasRecogida);
+      
+      const recogidaExitosa = [];
+      
+      // Crear una recogida para cada fecha calculada
+      for (const fecha of fechasRecogida) {
+        // Crear objeto recogida exactamente como el formato de la API
+        const recogida = {
+          fechaSolicitud: fechasRecogida[0], // La fecha de solicitud siempre es hoy
+          fechaRecogidaEstimada: fecha,
+          fechaRecogidaReal: null,
+          incidencias: null,
+          contenedor: {
+            id: contenedor.id,
+            capacidad: contenedor.capacidad,
+            frecuencia: datosNormalizados.frecuencia,
+            tipoResiduo: contenedor.tipoResiduo
+          }
+        };
+        
+        console.log(`Creando recogida para fecha ${fecha}:`, JSON.stringify(recogida, null, 2));
+        
+        // Enviar la solicitud para crear la recogida
+        const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(recogida),
+        });
+        
+        if (recogidaResponse.ok) {
+          const recogidaCreada = await recogidaResponse.json();
+          console.log(`Recogida para fecha ${fecha} creada exitosamente:`, recogidaCreada);
+          recogidaExitosa.push(fecha);
+        } else {
+          const errorText = await recogidaResponse.text();
+          console.error(`Error al crear recogida para fecha ${fecha}: ${recogidaResponse.status} - ${errorText}`);
         }
-      };
-      
-      console.log("Creando recogida con formato exacto:", JSON.stringify(recogida, null, 2));
-      
-      // Enviar la solicitud para crear la recogida
-      const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recogida),
-      });
-      
-      if (!recogidaResponse.ok) {
-        throw new Error(`Error creando recogida: ${recogidaResponse.status}`);
       }
       
-      const recogidaCreada = await recogidaResponse.json();
-      console.log("Recogida creada exitosamente:", recogidaCreada);
-      
-      return true;
+      return recogidaExitosa.length > 0;
     } catch (error) {
       console.error("Error en crearRecogidaManual:", error);
       return false;
     }
   }, []);
-
+  
   // Modificar el servicio registroAPI cuando se monte el componente (monkey patching)
   useEffect(() => {
     console.log("Iniciando modificación del servicio registroAPI...");
@@ -263,9 +339,9 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
         const result = await originalSubmitFormDataRef.current(formData);
         console.log("Resultado del registro original:", result);
         
-        // Si el registro fue exitoso, crear inmediatamente una recogida
+        // Si el registro fue exitoso, crear inmediatamente las recogidas
         if (result) {
-          console.log("REGISTRO EXITOSO! Ahora creando recogida automáticamente...");
+          console.log("REGISTRO EXITOSO! Ahora creando recogidas automáticamente...");
           
           // Normalizar los datos para la recogida
           const datosNormalizados = {
@@ -340,7 +416,7 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
             console.log("Intentando método directo como último recurso...");
             const recogidaResult = await crearRecogidaDirecta(datosNormalizados);
             if (recogidaResult) {
-              console.log("¡Recogida creada con éxito mediante método directo!");
+              console.log("¡Recogidas creadas con éxito mediante método directo!");
               setRecogidaCreada(true);
             }
             
@@ -353,40 +429,53 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
           
           // Obtener fecha actual formateada
           const fechaHoy = new Date();
-          const fechaHoyFormateada = fechaHoy.toISOString().split('T')[0];
           
-          // Crear objeto recogida con el formato exacto que espera la API
-          const recogida = {
-            fechaSolicitud: fechaHoyFormateada,
-            fechaRecogidaEstimada: fechaHoyFormateada,
-            fechaRecogidaReal: null,
-            incidencias: null,
-            estado: "pendiente",
-            contenedor: {
-              id: contenedor.id
+          // Generar las próximas 5 fechas según la frecuencia
+          const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
+          setFechasRecogida(fechasRecogida);
+          
+          let recogidaExitosa = false;
+          const fechasCreadas = [];
+          
+          // Crear recogidas para cada fecha calculada
+          for (const fecha of fechasRecogida) {
+            // Crear objeto recogida con el formato exacto que espera la API
+            const recogida = {
+              fechaSolicitud: fechasRecogida[0], // La fecha de solicitud siempre es hoy
+              fechaRecogidaEstimada: fecha,
+              fechaRecogidaReal: null,
+              incidencias: null,
+              estado: "pendiente",
+              contenedor: {
+                id: contenedor.id
+              }
+            };
+            
+            console.log(`Enviando recogida para fecha ${fecha}:`, JSON.stringify(recogida, null, 2));
+            
+            // Enviar solicitud para crear la recogida
+            const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(recogida),
+            });
+            
+            if (recogidaResponse.ok) {
+              const recogidaCreada = await recogidaResponse.json();
+              console.log(`¡RECOGIDA CREADA EXITOSAMENTE para fecha ${fecha}!`, recogidaCreada);
+              fechasCreadas.push(fecha);
+            } else {
+              const errorText = await recogidaResponse.text();
+              console.error(`Error al crear recogida para fecha ${fecha}:`, recogidaResponse.status, errorText);
             }
-          };
-          
-          console.log("Enviando recogida:", JSON.stringify(recogida, null, 2));
-          
-          // Enviar solicitud para crear la recogida
-          const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(recogida),
-          });
-          
-          if (!recogidaResponse.ok) {
-            const errorText = await recogidaResponse.text();
-            console.error("Error al crear recogida:", recogidaResponse.status, errorText);
-            return result;
           }
           
-          const recogidaCreada = await recogidaResponse.json();
-          console.log("¡RECOGIDA CREADA EXITOSAMENTE!", recogidaCreada);
-          setRecogidaCreada(true);
+          if (fechasCreadas.length > 0) {
+            console.log(`Se crearon ${fechasCreadas.length} recogidas con éxito:`, fechasCreadas);
+            setRecogidaCreada(true);
+          }
         }
         
         return result;
@@ -408,7 +497,7 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
         console.log("Restaurando el servicio registroAPI original");
       }
     };
-  }, []);
+  }, [crearRecogidaDirecta]);
 
   // Función para obtener los datos del propietario
   const fetchPropietarioData = useCallback(async () => {
@@ -640,18 +729,18 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
         
         console.log("Enviando formulario con frecuencia:", formDataToSubmit.frecuencia);
         
-        // Enviar datos a la API (la recogida se creará automáticamente gracias al monkey patching)
+        // Enviar datos a la API (las recogidas se crearán automáticamente gracias al monkey patching)
         const resultado = await registroAPI.submitFormData(formDataToSubmit);
         console.log("Registro completado exitosamente:", resultado);
         
-        // Esperar un momento más largo para dar tiempo a que se procese la recogida
-        console.log("Esperando a que se complete la creación de la recogida...");
+        // Esperar un momento más largo para dar tiempo a que se procesen las recogidas
+        console.log("Esperando a que se complete la creación de las recogidas...");
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         // Abrir modal de éxito
         setIsSuccessModalOpen(true);
         
-        // Con esto asumimos que la recogida se creó correctamente para el mensaje del modal
+        // Con esto asumimos que las recogidas se crearon correctamente para el mensaje del modal
         setRecogidaCreada(true);
 
         if (onRegisterSuccess) {
@@ -705,6 +794,27 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
       default:
         return "";
     }
+  };
+  
+  // Texto para el modal de éxito que muestra información sobre frecuencia
+  const getModalText = () => {
+    if (fechasRecogida.length > 0) {
+      // Formatear las fechas para mostrarlas en formato español
+      const fechasFormateadas = fechasRecogida.map(fecha => {
+        const [year, month, day] = fecha.split('-');
+        return `${day}/${month}/${year}`;
+      }).join(', ');
+      
+      // Mostrar el tipo de frecuencia de manera legible
+      let tipoFrecuencia = formData.frecuencia.toLowerCase();
+      if (tipoFrecuencia.includes('por semana')) {
+        const vecesXSemana = parseInt(formData.frecuencia.match(/(\d+)/)?.[0] || '1');
+        tipoFrecuencia = `${vecesXSemana} veces por semana`;
+      }
+      
+      return `Se han programado 5 recogidas con frecuencia "${tipoFrecuencia}".`;
+    }
+    return "Se han programado las próximas 5 recogidas de acuerdo con la frecuencia seleccionada.";
   };
 
   return (
@@ -793,7 +903,7 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
           <div className="modal-content">
             <h2>Registro Exitoso</h2>
             <p>Nuevo contenedor registrado con éxito.</p>
-            <p>Se ha programado una recogida para hoy según el horario seleccionado.</p>
+            <p>{getModalText()}</p>
             <button onClick={handleModalClose} className="modal-button">
               Aceptar
             </button>
