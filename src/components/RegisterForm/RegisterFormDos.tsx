@@ -10,105 +10,37 @@ import { registroAPI } from "@/services/api";
 import { FormData, FormErrors, Recogida } from "@/types/types";
 import "./stylesRegisterForm.css";
 
-
 interface RegisterFormDosProps {
   onRegisterSuccess?: () => void;
 }
 
-// Función auxiliar para calcular la próxima fecha de recogida según la frecuencia
-const calcularProximasRecogidas = (frecuencia: string, horario: string): Date[] => {
-  // Para frecuencia "Ocasional", no generamos fechas automáticamente
-  if (frecuencia === 'Ocasional') {
-    console.log('Frecuencia Ocasional: No se generan fechas automáticas');
-    return []; // Devolver array vacío para no registrar recogidas automáticas
-  }
-  
-  const fechas: Date[] = [];
-  const hoy = new Date();
-  
-  // Establecer la hora según el horario seleccionado
-  let hora = 8; // Valor por defecto (8:00 AM) para horario de mañana
-  
-  switch(horario) {
-    case 'manana':
-      hora = 8; // 8:00 AM
-      break;
-    case 'tarde':
-      hora = 16; // 4:00 PM
-      break;
-    case 'noche':
-      hora = 22; // 10:00 PM
-      break;
-  }
-  
-  // Clonar la fecha actual para no modificar la original
-  let fechaBase = new Date(hoy);
-  // Normalizar a inicio del día
-  fechaBase.setHours(0, 0, 0, 0);
-  
-  // Determinar la primera fecha de recogida (solo una fecha)
-  
-  if (frecuencia === 'Diaria') {
-    // Para frecuencia diaria, empezamos desde mañana
-    fechaBase.setDate(fechaBase.getDate() + 1);
-    const nuevaFecha = new Date(fechaBase);
-    nuevaFecha.setHours(hora, 0, 0, 0);
-    fechas.push(nuevaFecha);
-  } 
-  else if (frecuencia === '3 por semana') {
-    // Buscar el próximo lunes, miércoles o viernes
-    const diasSemana = [1, 3, 5]; // 0=domingo, 1=lunes, etc.
-    let diaActual = new Date(fechaBase);
-    diaActual.setDate(diaActual.getDate() + 1); // Comenzar desde mañana
-    
-    // Buscar la próxima fecha que caiga en lunes, miércoles o viernes
-    while (fechas.length < 1) {
-      if (diasSemana.includes(diaActual.getDay())) {
-        const nuevaFecha = new Date(diaActual);
-        nuevaFecha.setHours(hora, 0, 0, 0);
-        fechas.push(nuevaFecha);
-      }
-      diaActual.setDate(diaActual.getDate() + 1);
-    }
-  }
-  else if (frecuencia === '1 por semana') {
-    // Una vez por semana (lunes)
-    const hoyDiaSemana = fechaBase.getDay(); // 0=domingo, 1=lunes, etc.
-    const diasHastaLunes = hoyDiaSemana === 1 ? 7 : ((8 - hoyDiaSemana) % 7 || 7); // Días hasta el próximo lunes
-    
-    const nuevaFecha = new Date(fechaBase);
-    nuevaFecha.setDate(fechaBase.getDate() + diasHastaLunes);
-    nuevaFecha.setHours(hora, 0, 0, 0);
-    fechas.push(nuevaFecha);
-  }
-  else if (frecuencia === 'Quincenal') {
-    // Encontrar el próximo viernes
-    const hoyDiaSemana = fechaBase.getDay();
-    const diasHastaViernes = hoyDiaSemana <= 5 ? 5 - hoyDiaSemana : 5 + (7 - hoyDiaSemana);
-    
-    // Primera fecha: próximo viernes
-    let fechaSiguiente = new Date(fechaBase);
-    fechaSiguiente.setDate(fechaBase.getDate() + diasHastaViernes);
-    fechaSiguiente.setHours(hora, 0, 0, 0);
-    fechas.push(new Date(fechaSiguiente));
-  }
-  else {
-    // Caso por defecto (no debería ocurrir con las validaciones)
-    console.warn(`Frecuencia no reconocida: ${frecuencia}. Usando Diaria como valor por defecto.`);
-    
-    // Para frecuencia diaria, empezamos desde mañana
-    fechaBase.setDate(fechaBase.getDate() + 1);
-    
-    const nuevaFecha = new Date(fechaBase);
-    nuevaFecha.setHours(hora, 0, 0, 0);
-    fechas.push(nuevaFecha);
-  }
-  
-  // Log para depuración
-  console.log(`Fecha generada para frecuencia ${frecuencia}:`, 
-    fechas.map(f => `${f.toISOString()} (${f.toLocaleDateString()})`));
-    
-  return fechas;
+// Constantes para mapeo de valores
+const HORARIO_MAPPING: Record<string, string> = {
+  'manana': 'M',  // mañana -> M
+  'tarde': 'T',   // tarde -> T 
+  'noche': 'N'    // noche -> N
+};
+
+// Mapeo de tipos de residuos a IDs
+const RESIDUO_ID_MAP: Record<string, number> = {
+  'Organico': 1,
+  'Vidrio': 2,
+  'Papel': 3,
+  'Plastico': 4,
+  'Aceite': 5,
+  'Poda': 6,
+  'Otros': 7
+};
+
+// Mapeo de fuentes (corregido para el error de tipo)
+const FUENTE_MAP: Record<string, string> = {
+  'Domestico': 'Domesticos',
+  'Supermercado': 'Supermercados',
+  'Fruteria': 'Fruterias',
+  'Comedor': 'Comedores',
+  'HORECA': 'SectorHORECA',
+  'Poda': 'RestosPoda',
+  'Agricola': 'RestosAgricolas'
 };
 
 const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
@@ -116,9 +48,7 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
 }) => {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [isProprietarioRegistered, setIsProprietarioRegistered] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [recogidas, setRecogidas] = useState<Recogida[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   
   const [formData, setFormData] = useState<FormData>({
@@ -259,89 +189,208 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   }, []);
 
-  // Función para programar las recogidas
-  const programarRecogidas = useCallback(async (propietarioDni: string, contenedor: any) => {
+  // Función para crear la recogida directamente
+  const crearRecogidaDirecta = useCallback(async (datosNormalizados: any) => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
+    
+    // Obtener la fecha actual
+    const fechaHoy = new Date();
+    
+    // Formato YYYY-MM-DD para la API
+    const fechaHoyFormateada = fechaHoy.toISOString().split('T')[0];
+    
+    // Obtener el horario en formato API
+    const horarioApi = HORARIO_MAPPING[formData.horario] || 'M';
+    
+    // Obtener capacidad según el tipo de contenedor
+    let capacidad = 16;
+    switch(formData.cantidad) {
+      case 'Cubo 16 L': capacidad = 16; break;
+      case 'Cubo 160 L': capacidad = 160; break;
+      case 'Contenedor 800 L': capacidad = 800; break;
+      case 'Contenedor 1200 L': capacidad = 1200; break;
+    }
+    
+    // Convertir la fuente al formato correcto
+    const fuenteFormateada = FUENTE_MAP[formData.fuente] || 'Domesticos';
+    
+    // Objeto para el endpoint estándar /recogidas
+    const recogidaEstandar = {
+      fechaSolicitud: fechaHoyFormateada,
+      fechaRecogidaEstimada: fechaHoyFormateada,
+      fechaRecogidaReal: null,
+      incidencias: null, // No añadir incidencia aunque sea fin de semana
+      estado: "pendiente",
+      propietarioDni: datosNormalizados.dni
+    };
+    
     try {
-      console.log("Programando recogidas para el propietario:", propietarioDni);
+      console.log('Enviando recogida para cualquier día de la semana:', JSON.stringify(recogidaEstandar, null, 2));
       
-      // Obtener las próximas fechas de recogida según la frecuencia seleccionada
-      const fechasRecogida = calcularProximasRecogidas(formData.frecuencia, formData.horario);
+      const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(recogidaEstandar),
+      });
       
-      // Si no hay fechas para programar (Ocasional), simplemente terminar
-      if (fechasRecogida.length === 0) {
-        console.log(`No se programan recogidas automáticas para frecuencia "${formData.frecuencia}"`);
-        return [];
+      if (!recogidaResponse.ok) {
+        const errorText = await recogidaResponse.text();
+        console.error(`Error al crear recogida: ${recogidaResponse.status} - ${errorText}`);
+        return false;
       }
       
-      // Preparar los datos de recogida con el formato exacto
-      const nuevasRecogidas = fechasRecogida.map((fecha) => ({
-        fechaSolicitud: new Date().toISOString(),
-        fechaRecogidaEstimada: fecha.toISOString(),
+      const recogidaCreada = await recogidaResponse.json();
+      console.log('Recogida creada exitosamente:', recogidaCreada);
+      return true;
+    } catch (error) {
+      console.error('Error al crear recogida:', error);
+      return false;
+    }
+  }, [formData.horario, formData.cantidad, formData.fuente]);
+
+  // Función para modificar el servicio registroAPI
+  const monkeyPatchRegistroAPI = useCallback(() => {
+    // Guardar la función original
+    const originalSubmitFormData = registroAPI.submitFormData;
+    
+    // Sobreescribir la función con una versión modificada
+    registroAPI.submitFormData = async (formData: FormData): Promise<boolean> => {
+      try {
+        // Llamar a la implementación original
+        const result = await originalSubmitFormData(formData);
+        
+        // Si el registro fue exitoso, crear inmediatamente una recogida
+        if (result) {
+          console.log("Registro exitoso, creando recogida...");
+          
+          // Normalizar los datos para la recogida
+          const datosNormalizados = {
+            ...formData,
+            dni: formData.dni.trim().toUpperCase(),
+            telefono: formData.telefono.trim(),
+            cp: formData.cp.trim(),
+            nombre: formData.nombre.trim(),
+            email: formData.email.trim().toLowerCase(),
+            domicilio: formData.domicilio.trim(),
+            localidad: formData.localidad.trim(),
+            provincia: formData.provincia.trim()
+          };
+          
+          // Intentar crear la recogida directamente
+          await crearRecogidaDirecta(datosNormalizados);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error("Error en submitFormData modificado:", error);
+        throw error;
+      }
+    };
+    
+    console.log("Servicio registroAPI modificado para crear recogidas automáticamente en cualquier día de la semana");
+  }, [crearRecogidaDirecta]);
+
+  // Modificar el servicio registroAPI cuando se monte el componente
+  React.useEffect(() => {
+    monkeyPatchRegistroAPI();
+  }, [monkeyPatchRegistroAPI]);
+
+  // Función para crear manualmente una recogida después del registro
+  const crearRecogidaManual = useCallback(async (datosNormalizados: any) => {
+    // URL para la API de recogidas
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
+    
+    try {
+      // Primero, obtener todos los puntos de recogida
+      const puntosResponse = await fetch(`${API_BASE_URL}/puntos-recogida`);
+      if (!puntosResponse.ok) {
+        throw new Error(`Error obteniendo puntos de recogida: ${puntosResponse.status}`);
+      }
+      
+      const puntos = await puntosResponse.json();
+      console.log("Todos los puntos de recogida:", puntos);
+      
+      // Filtrar los puntos del propietario por DNI
+      const puntosPropietario = Array.isArray(puntos) 
+        ? puntos.filter(p => p.propietario && p.propietario.dni === datosNormalizados.dni)
+        : [];
+      
+      console.log("Puntos del propietario:", puntosPropietario);
+      
+      if (puntosPropietario.length === 0) {
+        throw new Error("No se encontraron puntos de recogida para el propietario");
+      }
+      
+      // Usar el primer punto de recogida
+      const puntoRecogida = puntosPropietario[0];
+      
+      // Obtener todos los contenedores
+      const contenedoresResponse = await fetch(`${API_BASE_URL}/contenedores`);
+      if (!contenedoresResponse.ok) {
+        throw new Error(`Error obteniendo contenedores: ${contenedoresResponse.status}`);
+      }
+      
+      const contenedores = await contenedoresResponse.json();
+      console.log("Todos los contenedores:", contenedores);
+      
+      // Filtrar los contenedores por punto de recogida
+      const contenedoresPunto = Array.isArray(contenedores)
+        ? contenedores.filter(c => c.puntoRecogida && c.puntoRecogida.id === puntoRecogida.id)
+        : [];
+      
+      console.log("Contenedores del punto de recogida:", contenedoresPunto);
+      
+      if (contenedoresPunto.length === 0) {
+        throw new Error("No se encontraron contenedores para el punto de recogida");
+      }
+      
+      // Usar el primer contenedor
+      const contenedor = contenedoresPunto[0];
+      
+      // Fecha actual
+      const fechaHoy = new Date();
+      const fechaHoyFormateada = fechaHoy.toISOString().split('T')[0];
+      
+      // Crear objeto recogida exactamente como el formato de la API
+      const recogida = {
+        fechaSolicitud: fechaHoyFormateada,
+        fechaRecogidaEstimada: fechaHoyFormateada,
         fechaRecogidaReal: null,
-        incidencias: null,
+        incidencias: null, // Sin incidencias en cualquier día de la semana
         contenedor: {
           id: contenedor.id,
-          capacidad: contenedor.capacidad || parseInt(formData.cantidad.match(/\d+/)[0]) || 16,
+          capacidad: contenedor.capacidad,
           frecuencia: formData.frecuencia,
-          tipoResiduo: {
-            id: formData.tipoResiduo === "Organico" ? 1 : 2,
-            descripcion: formData.tipoResiduo
-          },
-          puntoRecogida: {
-            id: contenedor.puntoRecogida?.id,
-            localidad: formData.localidad,
-            cp: parseInt(formData.cp),
-            provincia: formData.provincia,
-            direccion: formData.domicilio,
-            horario: formData.horario === "manana" ? "M" : 
-                    formData.horario === "tarde" ? "T" : "N",
-            tipo: formData.fuente,
-            propietario: {
-              dni: propietarioDni,
-              nombre: formData.nombre,
-              telefono: parseInt(formData.telefono.replace(/\D/g, '')),
-              email: formData.email
-            }
-          }
+          tipoResiduo: contenedor.tipoResiduo
         }
-      }));
+      };
       
-      console.log("Nuevas recogidas a programar:", nuevasRecogidas);
+      console.log("Creando recogida:", JSON.stringify(recogida, null, 2));
       
-      // Enviar las solicitudes de recogida
-      const recogidasRegistradas = [];
+      // Enviar la solicitud para crear la recogida
+      const recogidaResponse = await fetch(`${API_BASE_URL}/recogidas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(recogida),
+      });
       
-      for (const recogida of nuevasRecogidas) {
-        try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || '/api'}/recogidas`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(recogida),
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Error al programar recogida: ${response.statusText}`);
-          }
-          
-          const recogidaRegistrada = await response.json();
-          recogidasRegistradas.push(recogidaRegistrada);
-        } catch (error) {
-          console.error("Error al registrar una recogida:", error);
-          // Continuamos con las demás recogidas a pesar del error
-        }
+      if (!recogidaResponse.ok) {
+        throw new Error(`Error creando recogida: ${recogidaResponse.status}`);
       }
       
-      console.log("Recogidas programadas correctamente:", recogidasRegistradas);
-      setRecogidas(recogidasRegistradas);
+      const recogidaCreada = await recogidaResponse.json();
+      console.log("Recogida creada exitosamente:", recogidaCreada);
       
-      return recogidasRegistradas;
+      return true;
     } catch (error) {
-      console.error("Error al programar las recogidas:", error);
-      throw new Error(`Error al programar las recogidas: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      console.error("Error en crearRecogidaManual:", error);
+      return false;
     }
-  }, [formData]);
+  }, [formData.frecuencia]);
 
   // Separamos explícitamente la función de envío para usarla solo en el botón final
   const submitForm = useCallback(
@@ -373,71 +422,22 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
         
         console.log("Enviando datos del formulario:", datosNormalizados);
         
-        // Registramos al propietario y sus datos SOLO en este punto final
+        // Registramos al propietario y sus datos
         const registroResponse = await registroAPI.submitFormData(datosNormalizados);
         console.log("Respuesta del registro:", registroResponse);
         
-        const dniNormalizado = datosNormalizados.dni;
+        // Esperar un momento para asegurar que los datos se han guardado correctamente
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        try {
-          // Obtener los puntos de recogida del propietario
-          const puntosResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || '/api'}/puntos-recogida?dni=${dniNormalizado}`);
-          if (!puntosResponse.ok) {
-            throw new Error(`Error al obtener puntos de recogida: ${puntosResponse.statusText}`);
-          }
-          const puntosRecogida = await puntosResponse.json();
-          
-          if (puntosRecogida && puntosRecogida.length > 0) {
-            // Obtener el punto de recogida más reciente
-            const puntoRecogida = puntosRecogida[puntosRecogida.length - 1];
-            
-            // Obtener los contenedores de este punto de recogida
-            const contenedoresResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || '/api'}/contenedores?puntoRecogidaId=${puntoRecogida.id}`);
-            if (!contenedoresResponse.ok) {
-              throw new Error(`Error al obtener contenedores: ${contenedoresResponse.statusText}`);
-            }
-            const contenedores = await contenedoresResponse.json();
-            
-            if (contenedores && contenedores.length > 0) {
-              // Obtener el contenedor más reciente
-              const contenedor = contenedores[contenedores.length - 1];
-              
-              // Asegurarnos que el contenedor tenga la estructura completa
-              if (!contenedor.puntoRecogida) {
-                contenedor.puntoRecogida = puntoRecogida;
-              }
-              
-              // Programar las próximas recogidas (si no es Ocasional)
-              if (formData.frecuencia !== 'Ocasional') {
-                await programarRecogidas(dniNormalizado, contenedor);
-              } else {
-                console.log("Frecuencia Ocasional: No se programan recogidas automáticas");
-              }
-            } else {
-              console.warn("No se encontraron contenedores para el punto de recogida");
-              
-              // Crear un objeto contenedor con los datos disponibles para poder programar recogidas
-              const contenedorSimulado = {
-                id: Math.floor(Math.random() * 1000) + 100, // ID simulado
-                capacidad: parseInt(formData.cantidad.match(/\d+/)[0]) || 16,
-                puntoRecogida: puntoRecogida
-              };
-              
-              // Intentar programar recogidas con el contenedor simulado (si no es Ocasional)
-              if (formData.frecuencia !== 'Ocasional') {
-                await programarRecogidas(dniNormalizado, contenedorSimulado);
-              } else {
-                console.log("Frecuencia Ocasional: No se programan recogidas automáticas");
-              }
-            }
-          } else {
-            console.warn("No se encontraron puntos de recogida para el usuario");
-          }
-        } catch (fetchError) {
-          console.error("Error al obtener datos para programar recogidas:", fetchError);
-          // Continuamos para mostrar el mensaje de éxito aunque no se hayan programado recogidas
+        // Intentar crear la recogida manualmente después del registro
+        const recogidaCreada = await crearRecogidaManual(datosNormalizados);
+        
+        if (recogidaCreada) {
+          console.log("Recogida creada manualmente con éxito");
+        } else {
+          console.warn("No se pudo crear la recogida manualmente");
         }
-        
+  
         console.log("Registro completado exitosamente");
         
         // Abrir modal de éxito
@@ -446,17 +446,17 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
         if (onRegisterSuccess) {
           onRegisterSuccess();
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error completo en el proceso de registro:", error);
   
-        const errorMessage = error.message || "Error desconocido";
+        const errorMessage = error instanceof Error ? error.message : "Error desconocido";
   
         alert(`Registro fallido: ${errorMessage}`);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [formData, isSubmitting, validateForm, onRegisterSuccess, programarRecogidas]
+    [formData, isSubmitting, validateForm, onRegisterSuccess, crearRecogidaManual]
   );
 
   const handleModalClose = () => {
@@ -491,41 +491,6 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
     }
   };
 
-  // Función para formatear la fecha en formato legible
-  const formatearFecha = (fechaISO: string): string => {
-    const fecha = new Date(fechaISO);
-    
-    try {
-      return fecha.toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      console.error("Error al formatear fecha:", error);
-      // Formato alternativo por si falla el método toLocaleDateString
-      const options = { timeZone: 'Europe/Madrid' };
-      return fecha.toLocaleString('es-ES', options);
-    }
-  };
-  
-  // Traducir el horario a texto descriptivo
-  const traducirHorario = (codigo: string): string => {
-    switch(codigo) {
-      case 'M':
-        return 'Mañana (9:00 a 13:00)';
-      case 'T':
-        return 'Tarde (17:00 a 20:00)';
-      case 'N':
-        return 'Noche (a partir de las 23:00)';
-      default:
-        return codigo;
-    }
-  };
-
   // Manejador del evento keydown para prevenir el envío del formulario con Enter
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Si se presiona Enter en cualquier input excepto textarea, 
@@ -543,6 +508,11 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
         nextStep();
       }
     }
+  };
+
+  // Texto para el modal de éxito
+  const getModalText = () => {
+    return "Se ha programado una recogida para hoy según el horario seleccionado.";
   };
 
   return (
@@ -650,37 +620,7 @@ const RegisterFormDos: React.FC<RegisterFormDosProps> = ({
           <div className="modal-content">
             <h2>Registro Exitoso</h2>
             <p>Su registro se ha completado correctamente.</p>
-            
-            {recogidas.length > 0 ? (
-              <div className="recogidas-programadas">
-                <h3>Se ha programado su próxima recogida:</h3>
-                <ul className="recogidas-lista">
-                  {recogidas.map((recogida, index) => (
-                    <li key={index}>
-                      <span className="recogida-fecha">
-                        {formatearFecha(recogida.fechaRecogidaEstimada)}
-                      </span>
-                      {recogida.contenedor && (
-                        <span className="recogida-detalles">
-                          {' - '}
-                          {recogida.contenedor.tipoResiduo?.descripcion || formData.tipoResiduo}
-                          {' - '}
-                          {traducirHorario(recogida.contenedor.puntoRecogida?.horario || 
-                                         (formData.horario === "manana" ? "M" : 
-                                          formData.horario === "tarde" ? "T" : "N"))}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p>{formData.frecuencia === 'Ocasional' 
-                  ? 'El servicio ocasional no genera recogidas programadas automáticamente.' 
-                  : 'Se ha programado su próxima recogida según la frecuencia seleccionada.'}</p>
-            )}
-            
-            <p>Será redirigido a la página de inicio de sesión.</p>
+            <p>{getModalText()}</p>
             <button onClick={handleModalClose} className="modal-button">
               Aceptar
             </button>

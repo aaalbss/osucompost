@@ -78,15 +78,11 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
   useEffect(() => {
     try {
       const userDni = localStorage.getItem('userDni');
-      console.log('DNI del propietario con sesión iniciada:', userDni);
-      
       if (userDni) {
         setDniPropietarioSesion(userDni);
-      } else {
-        console.warn('No se encontró DNI en la sesión');
       }
     } catch (error) {
-      console.error('Error al obtener DNI de la sesión:', error);
+      // Error silencioso
     }
   }, []);
 
@@ -95,22 +91,25 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     const obtenerRecogidas = async () => {
       try {
         setCargando(true);
-        console.log('Obteniendo recogidas de la base de datos...');
         
-        const respuesta = await fetch('/api/recogidas');
+        // Evitar caché añadiendo un timestamp a la URL
+        const timestamp = new Date().getTime();
+        const respuesta = await fetch(`/api/recogidas?t=${timestamp}`);
+        
+        // Obtener solo la fecha (sin hora) del día actual para comparar
+        const fechaActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        
         if (respuesta.ok) {
           const datos = await respuesta.json();
-          console.log('Recogidas obtenidas de la base de datos:', datos);
           
-          // Obtener solo la fecha (sin hora) del día actual para comparar
-          const fechaActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-          
-          // Filtrar recogidas de hoy y futuras (que no han sido recogidas aún)
-          const recogidasFuturas = datos.filter((recogida: ExtendedRecogida) => {
+          // Filtrar recogidas de hoy y futuras que no han sido completadas
+          const recogidasPendientes = datos.filter((recogida: ExtendedRecogida) => {
+            // Si ya fue recogida (tiene fecha real), no la mostramos
             if (recogida.fechaRecogidaReal) {
-              return false; // Excluir si ya fue recogida
+              return false;
             }
             
+            // Convertir fecha estimada a objeto Date para comparar solo la fecha (sin hora)
             const fechaEstimada = new Date(recogida.fechaRecogidaEstimada);
             const soloFechaEstimada = new Date(
               fechaEstimada.getFullYear(), 
@@ -118,30 +117,27 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
               fechaEstimada.getDate()
             );
             
-            // Incluir si es de hoy o del futuro
+            // Incluir solo si es de hoy o del futuro
             return soloFechaEstimada >= fechaActual;
           });
           
           // Ordenar por fecha de recogida estimada (más cercanas primero)
-          const recogidasOrdenadas = recogidasFuturas.sort(
+          const recogidasOrdenadas = recogidasPendientes.sort(
             (a: ExtendedRecogida, b: ExtendedRecogida) => 
               new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
           );
           
-          console.log('Recogidas filtradas (incluyendo hoy y futuras):', recogidasOrdenadas.length);
           setRecogidasDB(recogidasOrdenadas);
         } else {
-          console.error('Error al obtener recogidas. Status:', respuesta.status);
           setError('Error al obtener las recogidas');
         }
       } catch (error) {
-        console.error('Error al obtener recogidas:', error);
         setError('Error de conexión al obtener recogidas');
       }
     };
 
     obtenerRecogidas();
-  }, [ahora]);
+  }, []);
 
   // Obtener los contenedores desde la API
   useEffect(() => {
@@ -152,12 +148,12 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     
     const obtenerContenedores = async () => {
       try {
-        console.log('Obteniendo contenedores...');
+        // Evitar caché añadiendo un timestamp a la URL
+        const timestamp = new Date().getTime();
+        const respuesta = await fetch(`/api/contenedores?t=${timestamp}`);
         
-        const respuesta = await fetch('/api/contenedores');
         if (respuesta.ok) {
           const datos = await respuesta.json();
-          console.log('Contenedores obtenidos:', datos);
           setContenedores(datos);
           
           // Determinar el DNI a utilizar
@@ -172,14 +168,11 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
             return null;
           })();
           
-          console.log('DNI a utilizar para filtrar contenedores:', dniAUtilizar);
-          
           // Filtrar los contenedores del propietario
           if (dniAUtilizar) {
             const contenedoresFiltrados = datos.filter(
               (cont: Contenedor) => cont.puntoRecogida?.propietario?.dni === dniAUtilizar
             );
-            console.log(`Contenedores del propietario ${dniAUtilizar}:`, contenedoresFiltrados);
             setContenedoresPropietario(contenedoresFiltrados);
             
             // Extraer puntos de recogida únicos
@@ -193,7 +186,6 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
               }
             });
             
-            console.log('Puntos de recogida únicos del propietario:', puntosUnicos);
             setPuntosRecogida(puntosUnicos);
             
             // Si solo hay un punto de recogida, seleccionarlo automáticamente
@@ -201,15 +193,12 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
               setPuntoSeleccionadoId(puntosUnicos[0].id);
             }
           } else {
-            console.warn('No se pudo determinar el DNI del propietario');
             setError('No se pudo identificar al propietario');
           }
         } else {
-          console.error('Error al obtener contenedores. Status:', respuesta.status);
           setError('Error al obtener los contenedores');
         }
       } catch (error) {
-        console.error('Error al obtener contenedores:', error);
         setError('Error de conexión');
       } finally {
         setCargando(false);
@@ -217,15 +206,11 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     };
 
     obtenerContenedores();
-  }, [contenedorIdNumerico, dniPropietarioSesion, ahora]);
+  }, [contenedorIdNumerico, dniPropietarioSesion]);
 
   // Procesar las recogidas y agruparlas por punto de recogida y contenedor
   useEffect(() => {
     if (cargando || contenedoresPropietario.length === 0 || recogidasDB.length === 0) {
-      if (!cargando && contenedoresPropietario.length > 0 && recogidasDB.length === 0) {
-        console.log('No hay recogidas en la base de datos para los contenedores del propietario');
-      }
-      
       if (!cargando) {
         setCargando(false);
       }
@@ -238,7 +223,6 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
       contenedoresAMostrar = contenedoresPropietario.filter(
         cont => cont.puntoRecogida && cont.puntoRecogida.id === puntoSeleccionadoId
       );
-      console.log(`Contenedores filtrados para punto de recogida ${puntoSeleccionadoId}:`, contenedoresAMostrar);
     }
     
     // Objeto para almacenar recogidas por cada contenedor
@@ -247,9 +231,22 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     // Procesar cada contenedor
     contenedoresAMostrar.forEach(contenedor => {
       // Filtrar recogidas para este contenedor
-      const recogidasContenedor = recogidasDB.filter(recogida => 
-        recogida.contenedor && recogida.contenedor.id === contenedor.id
-      );
+      const recogidasContenedor = recogidasDB.filter(recogida => {
+        // Comprobar si la recogida tiene contenedor y es el actual
+        if (recogida.contenedor && recogida.contenedor.id === contenedor.id) {
+          return true;
+        }
+        
+        // Comprobar alternativo: si la recogida tiene propietarioDni y coincide con el del punto
+        if (recogida.propietarioDni && 
+            contenedor.puntoRecogida && 
+            contenedor.puntoRecogida.propietario && 
+            recogida.propietarioDni === contenedor.puntoRecogida.propietario.dni) {
+          return true;
+        }
+        
+        return false;
+      });
       
       if (recogidasContenedor.length > 0) {
         // Ordenar por fecha estimada (más cercanas primero)
@@ -257,15 +254,11 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
           (a, b) => new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
         );
         
-        // Limitar a las 5 próximas recogidas
-        recogidasPorCont[contenedor.id] = recogidasOrdenadas.slice(0, 5);
-        console.log(`Recogidas para contenedor ${contenedor.id}:`, recogidasPorCont[contenedor.id].length);
-      } else {
-        console.log(`No hay recogidas para el contenedor ${contenedor.id}`);
+        // Mostramos más recogidas (hasta 10) para asegurar que aparecen las nuevas
+        recogidasPorCont[contenedor.id] = recogidasOrdenadas.slice(0, 10);
       }
     });
     
-    console.log('Recogidas por contenedor (desde la BD):', recogidasPorCont);
     setRecogidasPorContenedor(recogidasPorCont);
     setCargando(false);
   }, [recogidasDB, contenedoresPropietario, puntoSeleccionadoId, cargando]);
@@ -356,49 +349,51 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
           )}
         </div>
         
-        {/* Selector de punto de recogida (solo si hay más de uno) */}
-        {puntosRecogida.length > 1 && (
-          <div className="relative">
-            <button 
-              onClick={() => setMostrarDropdown(!mostrarDropdown)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-green-700 bg-white border border-green-200 rounded-md shadow-sm hover:bg-green-50"
-            >
-              <Home size={16} />
-              <span className="max-w-[150px] truncate">{obtenerNombrePuntoSeleccionado()}</span>
-              <ChevronDown size={16} />
-            </button>
-            
-            {mostrarDropdown && (
-              <div className="absolute right-0 z-10 mt-1 overflow-hidden bg-white rounded-md shadow-lg w-60">
-                <div className="py-1">
-                  <button
-                    onClick={() => {
-                      setPuntoSeleccionadoId(null);
-                      setMostrarDropdown(false);
-                    }}
-                    className="flex items-center justify-between w-full px-4 py-2 text-sm text-left hover:bg-green-50"
-                  >
-                    <span>Todos los puntos</span>
-                    {puntoSeleccionadoId === null && <Check size={16} className="text-green-600" />}
-                  </button>
-                  
-                  {puntosRecogida.map(punto => (
+        <div className="flex items-center gap-2">
+          {/* Selector de punto de recogida (solo si hay más de uno) */}
+          {puntosRecogida.length > 1 && (
+            <div className="relative">
+              <button 
+                onClick={() => setMostrarDropdown(!mostrarDropdown)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-green-700 bg-white border border-green-200 rounded-md shadow-sm hover:bg-green-50"
+              >
+                <Home size={16} />
+                <span className="max-w-[150px] truncate">{obtenerNombrePuntoSeleccionado()}</span>
+                <ChevronDown size={16} />
+              </button>
+              
+              {mostrarDropdown && (
+                <div className="absolute right-0 z-10 mt-1 overflow-hidden bg-white rounded-md shadow-lg w-60">
+                  <div className="py-1">
                     <button
-                      key={punto.id}
-                      onClick={() => seleccionarPunto(punto.id)}
+                      onClick={() => {
+                        setPuntoSeleccionadoId(null);
+                        setMostrarDropdown(false);
+                      }}
                       className="flex items-center justify-between w-full px-4 py-2 text-sm text-left hover:bg-green-50"
                     >
-                      <span className="truncate">
-                        {punto.direccion}, {punto.localidad}
-                      </span>
-                      {puntoSeleccionadoId === punto.id && <Check size={16} className="text-green-600" />}
+                      <span>Todos los puntos</span>
+                      {puntoSeleccionadoId === null && <Check size={16} className="text-green-600" />}
                     </button>
-                  ))}
+                    
+                    {puntosRecogida.map(punto => (
+                      <button
+                        key={punto.id}
+                        onClick={() => seleccionarPunto(punto.id)}
+                        className="flex items-center justify-between w-full px-4 py-2 text-sm text-left hover:bg-green-50"
+                      >
+                        <span className="truncate">
+                          {punto.direccion}, {punto.localidad}
+                        </span>
+                        {puntoSeleccionadoId === punto.id && <Check size={16} className="text-green-600" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="px-4 py-3">
@@ -420,7 +415,7 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
               <p className="mt-2 text-sm text-gray-500">No se encontraron contenedores asociados a su cuenta.</p>
             )}
             {contenedoresPropietario.length > 0 && (
-              <p className="mt-2 text-sm text-gray-500">No se encontraron recogidas programadas en la base de datos.</p>
+              <p className="mt-2 text-sm text-gray-500">No se encontraron recogidas programadas.</p>
             )}
           </div>
         ) : (
@@ -449,7 +444,7 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
                     </div>
                     
                     <div className="text-xs text-gray-500">
-                      ID: {contenedorId}
+                      ID Contenedor: {contenedorId}
                     </div>
                   </div>
                   
@@ -512,6 +507,11 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
                               </div>
                             </div>
                           )}
+
+                          {/* Mostrar ID para depuración */}
+                          <div className="p-2 text-xs text-center text-gray-400 border-t">
+                            <span>ID Recogida: {recogida.id || 'N/A'}</span>
+                          </div>
                         </div>
                       );
                     })}

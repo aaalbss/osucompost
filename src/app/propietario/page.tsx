@@ -7,7 +7,7 @@ import { ExtendedRecogida, ExtendedContenedor } from "@/types/extendedTypes";
 import { cascadeDeleteService } from "@/services/CascadeDeleteService";
 import { contenedorAPI } from "@/services/api"; 
 import { formatearTipoResiduo } from "@/utils/formatoResiduos";
-import { ArrowLeft, BarChart3 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 // Importamos el único UserHeader disponible
 import UserHeader from '@/components/propietario/UserHeader';
