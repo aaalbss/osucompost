@@ -23,11 +23,17 @@ const HORARIO_MAPPING: Record<string, string> = {
 
 // Función para calcular las próximas fechas según la frecuencia
 const calcularFechasFuturas = (fechaInicio: Date, frecuencia: string, cantidad = 5): string[] => {
-  const fechas = [];
-  let fechaActual = new Date(fechaInicio);
-  
   // Convertir frecuencia a un formato estandarizado
   const frecuenciaLower = frecuencia.toLowerCase();
+  
+  // Check if frequency is "ocasional" - return empty array (no pickups)
+  if (frecuenciaLower === 'ocasional') {
+    // Return empty array, no pickups scheduled
+    return [];
+  }
+  
+  const fechas = [];
+  let fechaActual = new Date(fechaInicio);
   
   // Primera fecha es la actual
   fechas.push(new Date(fechaActual));
@@ -115,12 +121,25 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
   const crearRecogidaDirecta = useCallback(async (datosNormalizados: any) => {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
     
+    // Si la frecuencia es ocasional, no creamos ninguna recogida
+    if (datosNormalizados.frecuencia.toLowerCase() === 'ocasional') {
+      console.log("Frecuencia ocasional seleccionada: no se programarán recogidas automáticas");
+      setFechasRecogida([]);
+      return true; // Devolvemos true para indicar que no hubo error
+    }
+    
     // Calcular la fecha para hoy
     const fechaHoy = new Date();
     
-    // Generar las próximas 5 fechas según la frecuencia
+    // Generar las próximas fechas según la frecuencia
     const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
     setFechasRecogida(fechasRecogida);
+    
+    // Si no hay fechas para programar (caso de frecuencia ocasional), salimos
+    if (fechasRecogida.length === 0) {
+      console.log("No hay fechas para programar");
+      return true;
+    }
     
     // Obtener el horario en formato API
     const horarioApi = HORARIO_MAPPING[datosNormalizados.horario] || 'M';
@@ -213,6 +232,13 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
 
   // Función para crear una recogida manual usando el API
   const crearRecogidaManual = useCallback(async (datosNormalizados: any) => {
+    // Si la frecuencia es ocasional, no creamos ninguna recogida
+    if (datosNormalizados.frecuencia.toLowerCase() === 'ocasional') {
+      console.log("Frecuencia ocasional seleccionada: no se programarán recogidas manuales");
+      setFechasRecogida([]);
+      return true; // Devolvemos true para indicar que no hubo error
+    }
+    
     // URL para la API de recogidas
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || '/api';
     
@@ -266,9 +292,15 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
       // Fecha actual
       const fechaHoy = new Date();
       
-      // Generar las próximas 5 fechas según la frecuencia
+      // Generar las próximas fechas según la frecuencia
       const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
       setFechasRecogida(fechasRecogida);
+      
+      // Si no hay fechas para programar (caso de frecuencia ocasional), salimos
+      if (fechasRecogida.length === 0) {
+        console.log("No hay fechas para programar");
+        return true;
+      }
       
       const recogidaExitosa = [];
       
@@ -357,6 +389,14 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
             horario: formData.horario || 'manana'
           };
           
+          // Verificar si la frecuencia es ocasional - en ese caso no creamos recogidas
+          if (datosNormalizados.frecuencia.toLowerCase() === 'ocasional') {
+            console.log("Frecuencia ocasional seleccionada: no se programarán recogidas automáticas");
+            setFechasRecogida([]); // Asegurar que no hay fechas programadas
+            setRecogidaCreada(true); // Consideramos el proceso completo
+            return result;
+          }
+          
           // Esperar un momento para que el registro se complete totalmente en la base de datos
           console.log("Esperando 2 segundos para asegurar que el registro se complete...");
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -430,9 +470,16 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
           // Obtener fecha actual formateada
           const fechaHoy = new Date();
           
-          // Generar las próximas 5 fechas según la frecuencia
+          // Generar las próximas fechas según la frecuencia
           const fechasRecogida = calcularFechasFuturas(fechaHoy, datosNormalizados.frecuencia, 5);
           setFechasRecogida(fechasRecogida);
+          
+          // Si no hay fechas para programar (caso de frecuencia ocasional), salimos
+          if (fechasRecogida.length === 0) {
+            console.log("No hay fechas para programar");
+            setRecogidaCreada(true);
+            return result;
+          }
           
           let recogidaExitosa = false;
           const fechasCreadas = [];
@@ -798,6 +845,13 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
   
   // Texto para el modal de éxito que muestra información sobre frecuencia
   const getModalText = () => {
+    const frecuenciaLower = formData.frecuencia.toLowerCase();
+    
+    // For occasional frequency, show a different message
+    if (frecuenciaLower === 'ocasional') {
+      return "No se han programado recogidas automáticas. Podrá solicitar la recogida cuando lo necesite.";
+    }
+    
     if (fechasRecogida.length > 0) {
       // Formatear las fechas para mostrarlas en formato español
       const fechasFormateadas = fechasRecogida.map(fecha => {
@@ -812,9 +866,10 @@ const RegisterFormTres: React.FC<RegisterFormTresProps> = ({
         tipoFrecuencia = `${vecesXSemana} veces por semana`;
       }
       
-      return `Se han programado 5 recogidas con frecuencia "${tipoFrecuencia}".`;
+      return `Se han programado ${fechasRecogida.length} recogidas con frecuencia "${tipoFrecuencia}".`;
     }
-    return "Se han programado las próximas 5 recogidas de acuerdo con la frecuencia seleccionada.";
+    
+    return "Se han programado las próximas recogidas de acuerdo con la frecuencia seleccionada.";
   };
 
   return (
