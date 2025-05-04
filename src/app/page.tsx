@@ -24,6 +24,7 @@ import "./globals.css";
 //import ModeloNegocio from "@/components/ModeloNegocio";
 import OsucompostProcess from "@/components/OsucompostProcess";
 import SuccessModal from "@/components/SuccessModal";
+import SessionCleaner from "@/components/SessionCleaner";
 
 //import Info from "@/components/Info";
 import ScrollTransition from "@/components/ScrollTransiton";
@@ -89,6 +90,9 @@ function SearchParamsComponent() {
 const HomePage = () => {
   return (
     <div className="relative min-h-screen">
+      {/* Componente para limpiar sesiones de operarios */}
+      <SessionCleaner />
+      
       {/* Fondo con gradiente fijo */}
       <div className="fixed top-0 left-0 w-full h-full bg-gradient-to-b from-white via-[#E8EFE2] to-white"></div>
 
