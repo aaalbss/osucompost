@@ -77,7 +77,8 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
   // Obtener el DNI del propietario con sesión iniciada
   useEffect(() => {
     try {
-      const userDni = localStorage.getItem('userDni');
+      // Intentar obtener tanto el DNI normal como el DNI del propietario desde operarios
+      const userDni = localStorage.getItem('userDni') || localStorage.getItem('propietarioDni');
       if (userDni) {
         setDniPropietarioSesion(userDni);
       }
@@ -86,58 +87,38 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     }
   }, []);
 
-  // Obtener las recogidas de la base de datos
+  // En lugar de cargar las recogidas desde la API, utilizar las que vienen como prop
   useEffect(() => {
-    const obtenerRecogidas = async () => {
-      try {
-        setCargando(true);
-        
-        // Evitar caché añadiendo un timestamp a la URL
-        const timestamp = new Date().getTime();
-        const respuesta = await fetch(`/api/recogidas?t=${timestamp}`);
-        
-        // Obtener solo la fecha (sin hora) del día actual para comparar
-        const fechaActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-        
-        if (respuesta.ok) {
-          const datos = await respuesta.json();
-          
-          // Filtrar recogidas de hoy y futuras que no han sido completadas
-          const recogidasPendientes = datos.filter((recogida: ExtendedRecogida) => {
-            // Si ya fue recogida (tiene fecha real), no la mostramos
-            if (recogida.fechaRecogidaReal) {
-              return false;
-            }
-            
-            // Convertir fecha estimada a objeto Date para comparar solo la fecha (sin hora)
-            const fechaEstimada = new Date(recogida.fechaRecogidaEstimada);
-            const soloFechaEstimada = new Date(
-              fechaEstimada.getFullYear(), 
-              fechaEstimada.getMonth(), 
-              fechaEstimada.getDate()
-            );
-            
-            // Incluir solo si es de hoy o del futuro
-            return soloFechaEstimada >= fechaActual;
-          });
-          
-          // Ordenar por fecha de recogida estimada (más cercanas primero)
-          const recogidasOrdenadas = recogidasPendientes.sort(
-            (a: ExtendedRecogida, b: ExtendedRecogida) => 
-              new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
-          );
-          
-          setRecogidasDB(recogidasOrdenadas);
-        } else {
-          setError('Error al obtener las recogidas');
-        }
-      } catch (error) {
-        setError('Error de conexión al obtener recogidas');
+    // Obtener solo la fecha (sin hora) del día actual para comparar
+    const fechaActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    
+    // Filtrar recogidas de hoy y futuras que no han sido completadas
+    const recogidasPendientes = recogidas.filter((recogida: ExtendedRecogida) => {
+      // Si ya fue recogida (tiene fecha real), no la mostramos
+      if (recogida.fechaRecogidaReal) {
+        return false;
       }
-    };
-
-    obtenerRecogidas();
-  }, []);
+      
+      // Convertir fecha estimada a objeto Date para comparar solo la fecha (sin hora)
+      const fechaEstimada = new Date(recogida.fechaRecogidaEstimada);
+      const soloFechaEstimada = new Date(
+        fechaEstimada.getFullYear(), 
+        fechaEstimada.getMonth(), 
+        fechaEstimada.getDate()
+      );
+      
+      // Incluir solo si es de hoy o del futuro
+      return soloFechaEstimada >= fechaActual;
+    });
+    
+    // Ordenar por fecha de recogida estimada (más cercanas primero)
+    const recogidasOrdenadas = recogidasPendientes.sort(
+      (a: ExtendedRecogida, b: ExtendedRecogida) => 
+        new Date(a.fechaRecogidaEstimada).getTime() - new Date(b.fechaRecogidaEstimada).getTime()
+    );
+    
+    setRecogidasDB(recogidasOrdenadas);
+  }, [recogidas, ahora]);
 
   // Obtener los contenedores desde la API
   useEffect(() => {
@@ -263,6 +244,7 @@ const ProximasRecogidas: React.FC<ProximasRecogidasProps> = ({
     setCargando(false);
   }, [recogidasDB, contenedoresPropietario, puntoSeleccionadoId, cargando]);
 
+  // El resto del componente se mantiene igual...
   // Formatear información de fecha
   const obtenerInfoFecha = (fechaString: string) => {
     const fecha = new Date(fechaString);
