@@ -11,7 +11,8 @@ import {
   Trash2, 
   Clock, 
   Calendar,
-  Package
+  Package,
+  Info
 } from 'lucide-react';
 
 // URL de la API
@@ -21,6 +22,7 @@ const API_URL = '/api';
 interface Contenedor {
   id: number;
   capacidad: number;
+  frecuencia?: string;
   tipoResiduo?: {
     id: number;
     descripcion: string;
@@ -40,6 +42,23 @@ interface Contenedor {
       email?: string;
     };
   };
+}
+
+interface Recogida {
+  id: number;
+  fechaSolicitud: string;
+  fechaRecogidaEstimada: string;
+  fechaRecogidaReal: string | null;
+  incidencias: string | null;
+  contenedor: {
+    id: number;
+    capacidad: number;
+    tipoResiduo?: {
+      id: number;
+      descripcion: string;
+    };
+  };
+  frecuencia: string;
 }
 
 interface Propietario {
@@ -241,7 +260,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
   const [valorNuevo, setValorNuevo] = useState('');
 
   const [activeStep, setActiveStep] = useState(1);
-  const totalSteps = 3; // Ahora tenemos 5 pasos en lugar de 4
+  const totalSteps = 3; // Ahora tenemos 3 pasos
   
   // Valores originales del propietario
   const [valoresOriginales, setValoresOriginales] = useState({
@@ -255,6 +274,48 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
   const [dniUsuario, setDniUsuario] = useState<string | null>(null);
   const [dniError, setDniError] = useState<string>('');
   
+  // Estado para almacenar las recogidas existentes
+  const [recogidas, setRecogidas] = useState<Recogida[]>([]);
+  
+  // Estado para fechas no disponibles
+  const [fechasNoDisponibles, setFechasNoDisponibles] = useState<string[]>([]);
+  // Información del contenedor seleccionado
+  
+  const [contenedorSeleccionadoInfo, setContenedorSeleccionadoInfo] = useState<Contenedor | null>(null);
+  const [mostrarInfoContenedor, setMostrarInfoContenedor] = useState(false);
+
+  // Función para encontrar y establecer la primera fecha disponible
+  const establecerPrimeraFechaDisponible = (fechasOcupadas: string[]) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    // Verificar si la fecha actual está ocupada
+    const fechaHoyStr = hoy.toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
+    const fechaHoyOcupada = fechasOcupadas.includes(fechaHoyStr);
+    
+    if (fechaHoyOcupada) {
+      // Buscar la próxima fecha disponible (hasta 60 días)
+      for (let i = 1; i <= 60; i++) {
+        const fechaSiguiente = new Date(hoy);
+        fechaSiguiente.setDate(fechaSiguiente.getDate() + i);
+        const fechaSiguienteStr = fechaSiguiente.toLocaleDateString('sv-SE');
+        
+        if (!fechasOcupadas.includes(fechaSiguienteStr)) {
+          // Encontramos una fecha disponible
+          console.log(`Fecha hoy ocupada, estableciendo la próxima fecha disponible: ${fechaSiguienteStr}`);
+          setFechaRecogida(fechaSiguiente);
+          return;
+        }
+      }
+      // Si no se encuentra ninguna fecha disponible en los próximos 60 días, dejar la fecha actual
+      console.log('No se encontró ninguna fecha disponible en los próximos 60 días');
+    } else {
+      // Si la fecha actual está disponible, usarla
+      console.log('Fecha hoy disponible, usando fecha actual');
+      setFechaRecogida(hoy);
+    }
+  };
+
   const handleNextStep = () => {
     if (activeStep === 1) {
       // Verificar DNI antes de avanzar al siguiente paso
@@ -292,14 +353,68 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
             const horarioValue = HORARIO_MAPPING[contenedor.puntoRecogida.horario];
             setHorario(horarioValue || '');
           }
+
+          // Cargar las recogidas existentes para este contenedor
+          cargarRecogidasDeContenedor(contenedor.id);
         }
       }
-      
-      // Si se seleccionó crear nuevo contenedor, los valores se ingresarán en los siguientes pasos
     }
     
     if (activeStep < totalSteps) {
       setActiveStep(activeStep + 1);
+    }
+  };
+
+  // Función para cargar las recogidas existentes para un contenedor
+  const cargarRecogidasDeContenedor = async (contenedorId: number) => {
+    try {
+      setCargando(true);
+      
+      // Depuración: Log del contenedor específico que se está consultando
+      console.log(`Cargando recogidas ÚNICAMENTE para el contenedor ID: ${contenedorId}`);
+      
+      // Obtener recogidas de la API específicamente para este contenedor
+      const response = await fetch(`${API_URL}/recogidas?contenedorId=${contenedorId}&soloContenedor=true`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const recogidasContenedor = Array.isArray(data) ? data : [data];
+        
+        // Filtrar recogidas pendientes (sin fechaRecogidaReal) para este contenedor específico
+        const recogidasPendientes = recogidasContenedor.filter(
+          r => r.fechaRecogidaReal === null && 
+               r.contenedor?.id === contenedorId && // Doble verificación del contenedor
+               r.frecuencia !== FRECUENCIA_MAPPING.ocasional
+        );
+        
+        // Depuración: Log de recogidas pendientes encontradas
+        console.log('Recogidas pendientes encontradas:', recogidasPendientes);
+        
+        setRecogidas(recogidasPendientes);
+        
+        // Extraer las fechas no disponibles solo para este contenedor
+        const fechasOcupadas = recogidasPendientes.map(r => {
+          const fecha = new Date(r.fechaRecogidaEstimada);
+          return fecha.toLocaleDateString('sv-SE'); // Usar el mismo formato que en establecerPrimeraFechaDisponible
+        });
+        
+        // Depuración: Log de fechas ocupadas
+        console.log('Fechas ocupadas SOLO para este contenedor:', fechasOcupadas);
+        
+        setFechasNoDisponibles(fechasOcupadas);
+        
+        // Establecer por defecto la primera fecha disponible
+        establecerPrimeraFechaDisponible(fechasOcupadas);
+      } else {
+        // En caso de error en la respuesta, limpiar fechas ocupadas
+        console.warn('Error al obtener recogidas del contenedor');
+        setFechasNoDisponibles([]);
+      }
+    } catch (err) {
+      console.error('Error al cargar recogidas del contenedor:', err);
+      setFechasNoDisponibles([]); // Asegurar que no queden fechas bloqueadas por error
+    } finally {
+      setCargando(false);
     }
   };
   
@@ -531,8 +646,14 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
     // Actualizar estados según el contenedor seleccionado
     const contenedor = contenedoresUsuario.find(c => c.id === contenedorId);
     if (contenedor) {
+      setContenedorSeleccionadoInfo(contenedor);
       // Se actualizarán los valores en handleNextStep
     }
+  };
+
+  // Función para mostrar información del contenedor
+  const toggleInfoContenedor = () => {
+    setMostrarInfoContenedor(!mostrarInfoContenedor);
   };
   
   // Función para manejar la opción de crear un nuevo contenedor
@@ -545,7 +666,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
     setTipoContenedor('');
     setHorario('');
 
-    router.push('/propietario/nueva-recogida')
+    router.push('/propietario/nueva-recogida');
   };
   
   // Función de confirmación del modal
@@ -632,6 +753,29 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
     
     return dias;
   };
+
+  const esFechaNoDisponible = (fecha: Date): boolean => {
+    // Si no hay contenedor seleccionado o es un nuevo contenedor, no bloquear fechas
+    if (!selectedContainerId || isNewContainer) {
+      return false;
+    }
+    
+    const contenedor = contenedoresUsuario.find(c => c.id === selectedContainerId);
+    
+    // Si no se encuentra el contenedor o es de frecuencia ocasional, no bloquear
+    if (!contenedor || contenedor.frecuencia === FRECUENCIA_MAPPING.ocasional) {
+      return false;
+    }
+    
+    // Formatear la fecha para comparar con fechasNoDisponibles
+    const fechaFormateada = fecha.toLocaleDateString('sv-SE');
+        
+    // Depuración: Mostrar información de bloqueo de fecha
+    console.log(`Verificando bloqueo de fecha ${fechaFormateada}`);
+    console.log('Fechas no disponibles actuales:', fechasNoDisponibles);
+    
+    return fechasNoDisponibles.includes(fechaFormateada);
+  };
   // Modificar la función seleccionarFecha
   const seleccionarFecha = (fecha: Date) => {
     const hoy = new Date();
@@ -640,12 +784,19 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
     fecha.setHours(0, 0, 0, 0);
 
     const esAnteriorAHoy = fecha < hoy;
-
-    if (!esAnteriorAHoy) {
+    const esNoDisponible = esFechaNoDisponible(fecha);
+    
+    // Solo permitir seleccionar fechas válidas (no anteriores a hoy y no ocupadas)
+    if (!esAnteriorAHoy && !esNoDisponible) {
       setFechaRecogida(fecha);
       setMostrarCalendario(false);
+    } else if (esNoDisponible) {
+      // Mostrar mensaje si ya hay recogida en esa fecha
+      setError(`La fecha ${formatDate(fecha)} ya tiene una recogida agendada`);
+      setTimeout(() => setError(''), 3000);
     }
   };
+
   const getTipoResiduoDescripcion = (tipoId: number | undefined): string => {
     if (!tipoId) return 'No especificado';
     const tipoKey = RESIDUO_ID_TO_TIPO[tipoId];
@@ -673,6 +824,22 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
     return horarioKey && horarioKey in LABELS.horario
       ? LABELS.horario[horarioKey as keyof typeof LABELS.horario]
       : horario;
+  };
+  
+  // Para obtener descripción de frecuencia
+  const getFrecuenciaDescripcion = (frecuencia: string | undefined): string => {
+    if (!frecuencia) return 'No especificado';
+    
+    // Encontrar la clave correspondiente al valor
+    const frecuenciaKey = Object.entries(FRECUENCIA_MAPPING).find(
+      ([_, value]) => value === frecuencia
+    )?.[0];
+    
+    if (frecuenciaKey) {
+      return FRECUENCIA_MAPPING[frecuenciaKey as keyof typeof FRECUENCIA_MAPPING];
+    }
+    
+    return frecuencia;
   };
   
   const handleSubmit = async () => {
@@ -1118,9 +1285,10 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
                           {contenedor.puntoRecogida?.horario && (
                             <p>Horario: {getHorarioDescripcion(contenedor.puntoRecogida.horario)}</p>
                           )}
-                          
-                            <p className="truncate">ID del contenedor: {contenedor.id}</p>
-                         
+                          {contenedor.frecuencia && (
+                            <p>Frecuencia: {getFrecuenciaDescripcion(contenedor.frecuencia)}</p>
+                          )}
+                          <p className="truncate">ID del contenedor: {contenedor.id}</p>
                         </div>
                       </div>
                     </label>
@@ -1162,6 +1330,34 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
                 >
                   Continuar con nuevo contenedor
                 </button>
+              </div>
+            )}
+
+            {/* Información adicional sobre recogidas agendadas */}
+            {selectedContainerId && (
+              <div className="mt-4">
+                <button
+                  onClick={toggleInfoContenedor}
+                  className="flex items-center text-sm text-green-600 hover:text-green-800"
+                >
+                  <Info className="w-4 h-4 mr-1" />
+                  {mostrarInfoContenedor ? 'Ocultar información' : 'Información sobre recogidas agendadas'}
+                </button>
+                
+                {mostrarInfoContenedor && contenedorSeleccionadoInfo && (
+                  <div className="p-3 mt-2 text-sm border border-green-100 rounded-md bg-green-50">
+                    <p className="font-medium">
+                      Este contenedor tiene frecuencia de recogida: {' '}
+                      <span className="font-bold">{getFrecuenciaDescripcion(contenedorSeleccionadoInfo.frecuencia)}</span>
+                    </p>
+                    {contenedorSeleccionadoInfo.frecuencia !== FRECUENCIA_MAPPING.ocasional && (
+                      <p className="mt-1">
+                        No podrá solicitar recogidas puntuales en fechas donde ya existe una recogida agendada.
+                        Estas fechas se mostrarán bloqueadas en el calendario.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1320,8 +1516,11 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
                         fechaComparar.setHours(0, 0, 0, 0);
                         const esAnteriorAHoy = fechaComparar < hoy;
                         
-                        // Solo deshabilitamos días anteriores a hoy
-                        const deshabilitado = esAnteriorAHoy;
+                        // Comprobar si la fecha no está disponible
+                        const esNoDisponible = esFechaNoDisponible(dia);
+                        
+                        // Deshabilitar fechas anteriores a hoy y fechas no disponibles
+                        const deshabilitado = esAnteriorAHoy || esNoDisponible;
                         
                         return (
                           <button
@@ -1336,12 +1535,13 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
                             className={`
                               p-2 text-sm rounded-md 
                               ${!esDelMesActual ? 'text-gray-300' : ''}
-                              ${deshabilitado ? 'text-gray-300 cursor-not-allowed' : ''}
+                              ${esAnteriorAHoy ? 'text-gray-300 cursor-not-allowed' : ''}
+                              ${esNoDisponible && !esAnteriorAHoy ? 'bg-red-100 text-red-800 cursor-not-allowed' : ''}
                               ${dia.getDate() === fechaRecogida.getDate() && 
                                 dia.getMonth() === fechaRecogida.getMonth() ? 
-                                'bg-green-100 text-green-800 font-bold' : 'hover:bg-gray-100'} 
+                                'bg-green-100 text-green-800 font-bold' : ''}
                               ${!deshabilitado && esDelMesActual 
-                                ? 'text-gray-700 cursor-pointer' 
+                                ? 'text-gray-700 cursor-pointer hover:bg-gray-100' 
                                 : ''}
                             `}
                           >
@@ -1351,8 +1551,15 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
                       })}
                     </div>
 
-                    <div className="mt-2 text-xs text-center text-gray-500">
-                      No se permiten fechas anteriores a hoy
+                    {/* Leyenda mejorada del calendario */}
+                    <div className="mt-3 space-y-1 text-xs text-center text-gray-500">
+                      <div>No se permiten fechas anteriores a hoy</div>
+                      {fechasNoDisponibles.length > 0 && (
+                        <div className="flex items-center justify-center space-x-2">
+                          <span className="inline-block w-3 h-3 bg-red-100 rounded-sm"></span>
+                          <span>Fechas con recogidas ya agendadas</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1381,8 +1588,7 @@ const SolicitudRecogida: React.FC<SolicitudRecogidaProps> = ({ propietarioDni, o
             disabled={
               (activeStep === 1 && !dni) ||
               (activeStep === 2 && !selectedContainerId && !isNewContainer) ||
-              (activeStep === 3 && isNewContainer && !tipoResiduo) ||
-              (activeStep === 4 && isNewContainer && !tipoContenedor)
+              (activeStep === 3 && isNewContainer && !tipoResiduo)
             }
             className="px-4 py-2 ml-auto text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
           >
