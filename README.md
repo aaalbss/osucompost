@@ -10,7 +10,7 @@ Personal web development project for an organic waste management company in Osun
 
 ✅ Responsive design (mobile, tablet, desktop)  
 ✅ Consultation chatbot  
-✅ User management via database API
+✅ User management via database API                                 
 ✅ High performance optimization (Lighthouse 90+ desktop)  
 ✅ Excellent accessibility score (96+)  
 ✅ SEO-ready structure and best practices 
@@ -78,7 +78,7 @@ Proyecto personal de desarrollo web para empresa de gestión de residuos orgáni
 
 ✅ Diseño responsive (móvil, tablet, desktop)  
 ✅ Chatbot de consulta  
-✅ Gestión de usuarios mediante API de base de datos
+✅ Gestión de usuarios mediante API de base de datos                                
 ✅ Alta optimización de rendimiento (Lighthouse 90+ desktop)  
 ✅ Excelente puntuación de accesibilidad (96+)  
 ✅ Estructura preparada para SEO y mejores prácticas 
