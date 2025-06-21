@@ -1,4 +1,4 @@
-# 🌱 OSUCompost.es
+# 🌱 osucompost.es
 
 **🔗 Live site**: [www.osucompost.es](https://www.osucompost.es/)
 
@@ -66,7 +66,7 @@ npm start
 
 ---
 
-# 🌱 OSUCompost.es
+# 🌱 osucompost.es
 
 **🔗 Sitio web**: [www.osucompost.es](https://www.osucompost.es/)
 
