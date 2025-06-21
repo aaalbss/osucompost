@@ -68,7 +68,7 @@ npm start
 
 # 🌱 OSUCompost.es
 
-**🔗 Ver en vivo**: [www.osucompost.es](https://www.osucompost.es/)
+**🔗 Sitio web**: [www.osucompost.es](https://www.osucompost.es/)
 
 ## Descripción
 
