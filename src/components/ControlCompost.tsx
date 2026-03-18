@@ -45,7 +45,7 @@ const ControlCompost: React.FC = () => {
 
       for (let i = 1; i <= 6; i++) {
         try {
-          const response = await fetch(`https://mi-hkmuqdpa8-adlinares-projects.vercel.app/data/${i}`);
+          const response = await fetch(`https://apirender-i61d.onrender.com/data/${i}`);
           
           if (!response.ok) throw new Error("Error en la petición");
           
